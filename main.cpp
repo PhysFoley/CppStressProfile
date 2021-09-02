@@ -543,9 +543,9 @@ int main(int argc, char** argv)
                       << boxes[0][1] << ", " << boxes[0][2] << "}\n";
             
             NVT = true;
-            for(int i = 0; i < step.size(); i++)
+            for(int i = 1; i < step.size(); i++)
             {
-                
+                boxes.push_back(boxes[0]);
             }
         }
         else
@@ -851,9 +851,16 @@ int main(int argc, char** argv)
             delete[] step[i][j];
         }
     }
-    for(unsigned int i = 0; i < boxes.size(); i++)
+    if(NVT)
     {
-        delete[] boxes[i];
+        delete[] boxes[0];
+    }
+    else
+    {
+        for(unsigned int i = 0; i < boxes.size(); i++)
+        {
+            delete[] boxes[i];
+        }
     }
     delete[] zvals;
     delete[] Sb;

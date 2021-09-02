@@ -6,6 +6,9 @@
 # default compiler output
 a.out
 
+# some analysis stuff
+full_err_plot.py
+
 # sample input
 trajectories/
 
