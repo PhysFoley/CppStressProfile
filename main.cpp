@@ -1,3 +1,19 @@
+/***********************************************************************************
+* main.cpp
+* Samuel Foley
+*
+* For a complete description of how to use this program, consult the readme.
+*
+* Numerical routine for calculating Cooke membrane lateral stress profiles
+* from simulation trajectories in VTF format. The central algorithm for calculating
+* the stress profile is based on the Irving-Kirkwood formalism, and closely
+* follows the presentation in Allen & Tildesley (2nd edition, pages 448 and 449).
+*
+* Warning: I'm not responsible if this program ruins your files, breaks
+* your computer, and burns your house down. Use at your own risk.
+*
+************************************************************************************/
+
 #include <iostream>
 #include <fstream>
 #include <cmath>
