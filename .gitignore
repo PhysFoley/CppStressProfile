@@ -3,6 +3,9 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
+# Default compiler output
+a.out
+
 # Node artifact files
 node_modules/
 dist/

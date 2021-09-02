@@ -1,18 +1,18 @@
-/***********************************************************************************
+/******************************************************************************
 * main.cpp
 * Samuel Foley
 *
 * For a complete description of how to use this program, consult the readme.
 *
-* Numerical routine for calculating Cooke membrane lateral stress profiles
-* from simulation trajectories in VTF format. The central algorithm for calculating
+* Numerical routine for calculating Cooke membrane lateral stress profiles from
+* simulation trajectories in VTF format. The central algorithm for calculating
 * the stress profile is based on the Irving-Kirkwood formalism, and closely
-* follows the presentation in Allen & Tildesley (2nd edition, pages 448 and 449).
+* follows the presentation in Allen & Tildesley (2nd edition, pgs. 448 & 449).
 *
 * Warning: I'm not responsible if this program ruins your files, breaks
 * your computer, and burns your house down. Use at your own risk.
 *
-************************************************************************************/
+*******************************************************************************/
 
 #include <iostream>
 #include <fstream>
@@ -99,16 +99,16 @@ double fold(double r, double box_l)
 
 double mind(double dr, double box_l)
 {
-	return dr - box_l*std::floor( (dr/box_l) + 0.5);
+    return dr - box_l*std::floor( (dr/box_l) + 0.5);
 }
 
 //Note: min_dr stores return value
 void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
 {
-	for(int k=0; k<3; k++)
-	{
-		min_dr[k] = mind(ri[k]-rj[k], box_l[k]);
-	}
+    for(int k=0; k<3; k++)
+    {
+        min_dr[k] = mind(ri[k]-rj[k], box_l[k]);
+    }
 }
 
 //=========================================================
@@ -119,15 +119,15 @@ void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
 // returns standard deviation of array (unbiased estimator)
 double stdev(double *vals, int n)
 {
-	double sum = 0.0;
-	double sumsq = 0.0;
-	for(int i=0; i<n; i++)
-	{
-		sum += vals[i];
-		sumsq += vals[i]*vals[i];
-	}
-	float N = float(n);
-	return std::sqrt( (sumsq/(N-1.0)) - (sum*sum/(N*(N-1.0))) );
+    double sum = 0.0;
+    double sumsq = 0.0;
+    for(int i=0; i<n; i++)
+    {
+        sum += vals[i];
+        sumsq += vals[i]*vals[i];
+    }
+    float N = float(n);
+    return std::sqrt( (sumsq/(N-1.0)) - (sum*sum/(N*(N-1.0))) );
 }
 
 // takes an array of doubles and its length n
@@ -140,11 +140,11 @@ double stdev(double *vals, int n)
 // in the array
 int block(double *vals, int n)
 {
-	for(int i=0; i<n/2; i++)
-	{
-		vals[i] = (vals[2*i] + vals[(2*i)+1]) / 2.0;
-	}
-	return n/2;
+    for(int i=0; i<n/2; i++)
+    {
+        vals[i] = (vals[2*i] + vals[(2*i)+1]) / 2.0;
+    }
+    return n/2;
 }
 
 // takes an array of doubles and its length n
@@ -152,18 +152,18 @@ int block(double *vals, int n)
 // WARNING: modifies vals IN PLACE; destroys array contents
 double err_on_mean(double *vals, int n)
 {
-	double maxsig = 0.0;
-	double sig = 0.0;
-	while(n > 2)
-	{
-		sig = stdev(vals, n)/std::sqrt(float(n) - 1.0);
-		if(sig > maxsig)
-		{
-			maxsig = sig;
-		}
-		n = block(vals, n);
-	}
-	return maxsig;
+    double maxsig = 0.0;
+    double sig = 0.0;
+    while(n > 2)
+    {
+        sig = stdev(vals, n)/std::sqrt(float(n) - 1.0);
+        if(sig > maxsig)
+        {
+            maxsig = sig;
+        }
+        n = block(vals, n);
+    }
+    return maxsig;
 }
 
 
@@ -175,83 +175,83 @@ double (*forces[7][7])(double);
 
 double lj(double r, double b, double rc, double eps)
 {
-	if(r <= rc)
-	{
-		return 24.0*eps*( (std::pow(b,6.0)/std::pow(r,7.0)) - (2.0*std::pow(b,12.0)/std::pow(r,13.0)) );
-	}
-	else
-	{
-		return 0.0;
-	}
+    if(r <= rc)
+    {
+        return 24.0*eps*( (std::pow(b,6.0)/std::pow(r,7.0)) - (2.0*std::pow(b,12.0)/std::pow(r,13.0)) );
+    }
+    else
+    {
+        return 0.0;
+    }
 }
 
 double cos2(double r, double rc, double wc, double eps)
 {
-	if(r <= rc)
-	{
-		return 0.0;
-	}
-	else if(r > rc + wc)
-	{
-		return 0.0;
-	}
-	else
-	{
-		return (pi*eps/(2.0*wc))*std::sin(pi*(r-rc)/wc);
-	}
+    if(r <= rc)
+    {
+        return 0.0;
+    }
+    else if(r > rc + wc)
+    {
+        return 0.0;
+    }
+    else
+    {
+        return (pi*eps/(2.0*wc))*std::sin(pi*(r-rc)/wc);
+    }
 }
 
 double fene(double r, double k, double rinf)
 {
-	return k*r/(1.0 - std::pow(r/rinf,2.0) );
+    return k*r/(1.0 - std::pow(r/rinf,2.0) );
 }
 
 double bend(double r, double k)
 {
-	return k*(r-4.0);
+    return k*(r-4.0);
 }
 
 double ljcos2(double r, double b, double eps, double rc, double wc)
 {
-	return lj(r, b, rc, eps) + cos2(r, rc, wc, eps);
+    return lj(r, b, rc, eps) + cos2(r, rc, wc, eps);
 }
 
 //head-head type interactions - 00,55,66,05,06,56
 double f00(double r)
 {
-	if(r <= 0.95*std::pow(2.0,1.0/6.0) )
-	{
-		return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
-	}
-	else
-	{
-		return 0.0;
-	}
+    if(r <= 0.95*std::pow(2.0,1.0/6.0) )
+    {
+        return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
+    }
+    else
+    {
+        return 0.0;
+    }
 }
 
 //head-tail interactions - 01,51,61,02,03,04,52,53,54,62,63,64
 double f01(double r)
 {
-	if(r <= 0.95*std::pow(2.0,1.0/6.0) )
-	{
-		return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
-	}
-	else
-	{
-		return 0.0;
-	}
+    if(r <= 0.95*std::pow(2.0,1.0/6.0) )
+    {
+        return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
+    }
+    else
+    {
+        return 0.0;
+    }
 }
 
 //attractive tail-tail interactions - 11,12,13,14,22,24,33,34,44
 double f11(double r)
 {
-	return lj(r, 1.0, std::pow(2.0,1.0/6.0), 1.0) + cos2(r, std::pow(2.0,1.0/6.0), 1.6, 1.0);
+    return lj(r, 1.0, std::pow(2.0,1.0/6.0), 1.0) + cos2(r, std::pow(2.0,1.0/6.0), 1.6, 1.0);
 }
 
 //modified middle-middle interaction - not ljcos2
 double f23(double r)
 {
-	if(r <= std::pow(2.0,1.0/6.0) )
+    if(r <= std::pow(2.0,1.0/6.0) )
         {
                 return 24.0*( 1.0/std::pow(r,7.0) - (2.0/std::pow(r,13.0)) );
         }
@@ -305,7 +305,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
     {
         std::getline(infile, line);
         t.clear();
-		split_str(line, " ", &t);
+        split_str(line, " ", &t);
 
         if(t.size() > 1)
         {
@@ -356,9 +356,9 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss >> box_l[2];
                 
                 if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
-				{
-					boxes->push_back(box_l);
-				}
+                {
+                    boxes->push_back(box_l);
+                }
             }
             else if(s >= start)
             {
@@ -373,11 +373,11 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss.clear();
                 ss << t[3];
                 ss >> coord[2];
-				
-				if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
-				{
-					step->back().push_back(coord);
-				}
+                
+                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                {
+                    step->back().push_back(coord);
+                }
             }
         }
     }
@@ -394,37 +394,37 @@ int main(int argc, char** argv)
     forces[1][1] = f11;
     forces[2][2] = f11;
     forces[3][3] = f11;
-	forces[4][4] = f11;
-	forces[5][5] = f00;
-	forces[6][6] = f00;
+    forces[4][4] = f11;
+    forces[5][5] = f00;
+    forces[6][6] = f00;
 
     forces[0][1] = forces[1][0] = f01;
     forces[0][2] = forces[2][0] = f01;
     forces[0][3] = forces[3][0] = f01;
-	forces[0][4] = forces[4][0] = f01;
-	forces[0][5] = forces[5][0] = f00;
-	forces[0][6] = forces[6][0] = f00;
+    forces[0][4] = forces[4][0] = f01;
+    forces[0][5] = forces[5][0] = f00;
+    forces[0][6] = forces[6][0] = f00;
 
     forces[1][2] = forces[2][1] = f11;
     forces[1][3] = forces[3][1] = f11;
-	forces[1][4] = forces[4][1] = f11;
-	forces[1][5] = forces[5][1] = f01;
-	forces[1][6] = forces[6][1] = f01;
+    forces[1][4] = forces[4][1] = f11;
+    forces[1][5] = forces[5][1] = f01;
+    forces[1][6] = forces[6][1] = f01;
 
     forces[2][3] = forces[3][2] = f23;
-	forces[2][4] = forces[4][2] = f11;
-	forces[2][5] = forces[5][2] = f01;
-	forces[2][6] = forces[6][2] = f01;
-	
-	forces[3][4] = forces[4][3] = f11;
-	forces[3][5] = forces[5][3] = f01;
-	forces[3][6] = forces[6][3] = f01;
-	forces[4][5] = forces[5][4] = f01;
-	forces[4][6] = forces[6][4] = f01;
-	
-	forces[5][6] = forces[6][5] = f00;
-	
-	
+    forces[2][4] = forces[4][2] = f11;
+    forces[2][5] = forces[5][2] = f01;
+    forces[2][6] = forces[6][2] = f01;
+    
+    forces[3][4] = forces[4][3] = f11;
+    forces[3][5] = forces[5][3] = f01;
+    forces[3][6] = forces[6][3] = f01;
+    forces[4][5] = forces[5][4] = f01;
+    forces[4][6] = forces[6][4] = f01;
+    
+    forces[5][6] = forces[6][5] = f00;
+    
+    
 
     std::stringstream ss;
     std::string ifname("centered_trajectory.vtf");
@@ -434,7 +434,7 @@ int main(int argc, char** argv)
     int stop = -1;
     int interval = 1;
     int n_zvals = 51;
-	double thickness = 10.0;
+    double thickness = 10.0;
     double kT = 1.4;
     //double box_l[] = {17.270,17.270,20.0}; //changed this to fit my new system
 
@@ -496,18 +496,35 @@ int main(int argc, char** argv)
     std::vector<int> type;
     std::vector<std::vector<int> > bonds;
     std::vector<double*> boxes;
-
+    
     load_data(ifname, &step, &type, &bonds, &boxes, start, stop, interval);
     
-    std::cout << "There were " << boxes.size() << " boxes read from the trajectory file." << std::endl;
-    std::cout << "There were " << step.size() << " trajectory steps read in." << std::endl;
-    /*for(int i = 0; i < step.size(); i++)
+    std::cout << "Loaded:" << std::endl;
+    std::cout << "       " << type.size() << " particles" << std::endl;
+    std::cout << "       " << step.size() << " timesteps" << std::endl;
+    std::cout << "       " << boxes.size() << " box geometries" << std::endl;
+    
+    if(boxes.size() == 0 || type.size() == 0 || step.size() == 0)
     {
-        double* box_l = new double[3];
-        box_l[0] = box_l[1] = 12.42;
-        box_l[2] = 20.0;
-        boxes.push_back(box_l);
-    }*/
+        std::cout << "Error reading trajectory, failed to load "
+                  << "particles/timesteps/boxes" << std::endl;
+        
+        return EXIT_FAILURE;
+    }
+    
+    if(boxes.size() != step.size())
+    {
+        if(boxes.size() == 1)
+        {
+            std::cout << "Assuming constant volume {" << boxes[0][0] << ", "
+                      << boxes[0][1] << ", " << boxes[0][2] << "}\n";
+        }
+        else
+        {
+            std::cout << "Error: number of boxes and timesteps do not match\n";
+            return EXIT_FAILURE;
+        }
+    }
     
     double mean_x = 0.0;
     double mean_y = 0.0;
