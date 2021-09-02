@@ -297,6 +297,8 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
     infile.open(filename);
     std::string line;
     std::vector<std::string> t;
+    
+    double* init_box;
 
     std::stringstream ss;
     int inttemp = 0;
@@ -358,9 +360,17 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss << t[3];
                 ss >> box_l[2];
                 
-                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                if(s == -1)
+                {
+                    init_box = box_l;
+                }
+                else if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     boxes->push_back(box_l);
+                }
+                else
+                {
+                    delete[] box_l;
                 }
             }
             else if(s >= start)
@@ -381,10 +391,20 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 {
                     step->back().push_back(coord);
                 }
+                else
+                {
+                    delete[] coord;
+                }
             }
         }
     }
     infile.close();
+    
+    if(boxes->size() == 0)
+    {
+        boxes->push_back(init_box);
+    }
+    
     std::cout << "Finished Loading File.\n" << std::endl;
 }
 
@@ -437,6 +457,7 @@ int main(int argc, char** argv)
     int n_zvals = 51;
     double thickness = 10.0;
     double kT = 1.4;
+    bool NVT = false;
 
     for(int i=1; i<argc-1; i+=2)
     {
@@ -520,6 +541,12 @@ int main(int argc, char** argv)
         {
             std::cout << "Assuming constant volume {" << boxes[0][0] << ", "
                       << boxes[0][1] << ", " << boxes[0][2] << "}\n";
+            
+            NVT = true;
+            for(int i = 0; i < step.size(); i++)
+            {
+                
+            }
         }
         else
         {
