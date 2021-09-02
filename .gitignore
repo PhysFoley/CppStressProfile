@@ -3,8 +3,9 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
-# default compiler output
+# compiler output
 a.out
+stresscalc
 
 # some analysis stuff
 full_err_plot.py

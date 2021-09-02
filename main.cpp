@@ -23,156 +23,25 @@
 #include <sstream>
 #include <algorithm>
 #include <stdlib.h>
+#include "mat3.hpp"
 
 const double pi = 3.1415926535897;
 
-class Mat3
-{
-private:
-    double vals[9];
-public:
-    Mat3();
-    Mat3(double* values);
-    Mat3(const Mat3& mat);
-    Mat3& operator=(const Mat3& mat);
-    double get(int row, int col) const;
-    void set(int row, int col, double val);
-};
-
-Mat3::Mat3()
-{
-    for(int i=0; i<9; i++)
-    {
-        this->vals[i] = 0.0;
-    }
-}
-
-Mat3::Mat3(const Mat3& mat)
-{
-    for(int i=0; i<9; i++)
-    {
-        this->vals[i] = mat.vals[i];
-    }
-}
-
-Mat3::Mat3(double* values)
-{
-    for(int i=0; i<9; i++)
-    {
-        this->vals[i] = values[i];
-    }
-}
-
-Mat3& Mat3::operator=(const Mat3& mat)
-{
-    for(int i=0; i<9; i++)
-    {
-        this->vals[i] = mat.vals[i];
-    }
-    return *this;
-}
-
-double Mat3::get(int row, int col) const
-{
-    return this->vals[row*3 + col];
-}
-
-void Mat3::set(int row, int col, double val)
-{
-    this->vals[row*3 + col] = val;
-}
-
 //=========================================================
-// Algorithm Utility Functions
+// IMPORTANT: Change these constants as appriopriate
 //=========================================================
 
-double fold(double r, double box_l)
-{
-    if(r >= 0.0)
-    {
-        return std::fmod(r, box_l);
-    }
-    else
-    {
-        return box_l + std::fmod(r, box_l);
-    }
-}
+//make sure this matches the number of distinct bead types!
+const int NUM_BEAD_TYPES = 7;
 
-double mind(double dr, double box_l)
-{
-    return dr - box_l*std::floor( (dr/box_l) + 0.5);
-}
-
-//Note: min_dr stores return value
-void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
-{
-    for(int k=0; k<3; k++)
-    {
-        min_dr[k] = mind(ri[k]-rj[k], box_l[k]);
-    }
-}
-
-//=========================================================
-// Blocking Algorithm
-//=========================================================
-
-// takes an array of doubles and its length n
-// returns standard deviation of array (unbiased estimator)
-double stdev(double *vals, int n)
-{
-    double sum = 0.0;
-    double sumsq = 0.0;
-    for(int i=0; i<n; i++)
-    {
-        sum += vals[i];
-        sumsq += vals[i]*vals[i];
-    }
-    float N = float(n);
-    return std::sqrt( (sumsq/(N-1.0)) - (sum*sum/(N*(N-1.0))) );
-}
-
-// takes an array of doubles and its length n
-// blocks the array in-place, so that the array
-// variable passed in now contains as its elements
-// the averages of neighboring pairs of values
-// that were originally in the array, and hence there
-// are now half as many elements
-// returns the number of elements that are now meaningful
-// in the array
-int block(double *vals, int n)
-{
-    for(int i=0; i<n/2; i++)
-    {
-        vals[i] = (vals[2*i] + vals[(2*i)+1]) / 2.0;
-    }
-    return n/2;
-}
-
-// takes an array of doubles and its length n
-// returns blocked error on mean (est of std of dist of mean)
-// WARNING: modifies vals IN PLACE; destroys array contents
-double err_on_mean(double *vals, int n)
-{
-    double maxsig = 0.0;
-    double sig = 0.0;
-    while(n > 2)
-    {
-        sig = stdev(vals, n)/std::sqrt(float(n) - 1.0);
-        if(sig > maxsig)
-        {
-            maxsig = sig;
-        }
-        n = block(vals, n);
-    }
-    return maxsig;
-}
-
+//make sure this is larger than longest-range non-bonded interaction!
+const double NB_CUTOFF = 3.0;
 
 //=========================================================
 // Derivatives of Interaction Potentials
 //=========================================================
 
-double (*forces[7][7])(double);
+double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double);
 
 double lj(double r, double b, double rc, double eps)
 {
@@ -260,6 +129,91 @@ double f23(double r)
         {
                 return 0.0;
         }
+}
+
+//=========================================================
+// Algorithm Utility Functions
+//=========================================================
+
+double fold(double r, double box_l)
+{
+    if(r >= 0.0)
+    {
+        return std::fmod(r, box_l);
+    }
+    else
+    {
+        return box_l + std::fmod(r, box_l);
+    }
+}
+
+double mind(double dr, double box_l)
+{
+    return dr - box_l*std::floor( (dr/box_l) + 0.5);
+}
+
+//Note: min_dr stores return value
+void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
+{
+    for(int k=0; k<3; k++)
+    {
+        min_dr[k] = mind(ri[k]-rj[k], box_l[k]);
+    }
+}
+
+//=========================================================
+// Blocking Algorithm
+//=========================================================
+
+// takes an array of doubles and its length n
+// returns standard deviation of array (unbiased estimator)
+double stdev(double *vals, int n)
+{
+    double sum = 0.0;
+    double sumsq = 0.0;
+    for(int i=0; i<n; i++)
+    {
+        sum += vals[i];
+        sumsq += vals[i]*vals[i];
+    }
+    float N = float(n);
+    return std::sqrt( (sumsq/(N-1.0)) - (sum*sum/(N*(N-1.0))) );
+}
+
+// takes an array of doubles and its length n
+// blocks the array in-place, so that the array
+// variable passed in now contains as its elements
+// the averages of neighboring pairs of values
+// that were originally in the array, and hence there
+// are now half as many elements
+// returns the number of elements that are now meaningful
+// in the array
+int block(double *vals, int n)
+{
+    for(int i=0; i<n/2; i++)
+    {
+        vals[i] = (vals[2*i] + vals[(2*i)+1]) / 2.0;
+    }
+    return n/2;
+}
+
+// takes an array of doubles and its length n
+// returns blocked error on mean (est of std of dist of mean)
+// WARNING: modifies vals IN PLACE; destroys array contents
+double err_on_mean(double *vals, int n)
+{
+    double maxsig = 0.0;
+    double sig = 0.0;
+    while(n > 2)
+    {
+        sig = stdev(vals, n)/std::sqrt(float(n) - 1.0);
+        if(sig > maxsig)
+        {
+            maxsig = sig;
+        }
+        n = block(vals, n);
+    }
+    return maxsig;
 }
 
 //=========================================================
@@ -413,6 +367,10 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
 //attractive tail-tail interactions - 11,12,13,14,22,24,33,34,44
 int main(int argc, char** argv)
 {
+    //=========================================================
+    // Define Interaction Matrix
+    //=========================================================
+    
     forces[0][0] = f00;
     forces[1][1] = f11;
     forces[2][2] = f11;
@@ -447,6 +405,12 @@ int main(int argc, char** argv)
     
     forces[5][6] = forces[6][5] = f00;
 
+    //=========================================================
+    // User modifications should not be necessary
+    // beyond this point
+    //=========================================================
+
+    //initialize command line args with default values
     std::stringstream ss;
     std::string ifname("centered_trajectory.vtf");
     std::string ofname("stress_profile.dat");
@@ -457,8 +421,8 @@ int main(int argc, char** argv)
     int n_zvals = 51;
     double thickness = 10.0;
     double kT = 1.4;
-    bool NVT = false;
 
+    //parse command line args
     for(int i=1; i<argc-1; i+=2)
     {
         if(std::string(argv[i]).compare("-f") == 0)
@@ -520,6 +484,7 @@ int main(int argc, char** argv)
     
     std::cout << std::endl;
     
+    bool NVT = false; //default assumption, to be checked later
     load_data(ifname, &step, &type, &bonds, &boxes, start, stop, interval);
     
     std::cout << "Loaded:" << std::endl;
@@ -598,8 +563,7 @@ int main(int argc, char** argv)
     rij = new double[3];
     rib = new double[3];
     
-    double Lz = boxes[0][2]; //assumed to be constant!
-    double nb_cutoff = 3.0; //make sure this is larger than longest-range nb interaction range!
+    double Lz = boxes[0][2]; //must be constant!
     
     std::cout << "Progress:" << std::endl;
     std::cout << "start|                    |end" << std::endl;
@@ -621,9 +585,8 @@ int main(int argc, char** argv)
             checkpoints.pop();
         }
         double A = boxes[s][0]*boxes[s][1];
-        for(int i = 0; i < type.size(); i++)
+        for(int i = 0; i < type.size(); i++) //loop over all particles i
         {
-            //std::cout << "Particle " << i << std::endl;
             ri = step[s][i];
             zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
             temp = kT/(A*space);
@@ -635,14 +598,12 @@ int main(int argc, char** argv)
                     Sk[zbin_ind_i].set(k,k,Sk[zbin_ind_i].get(k,k)+temp);
                 }
             }
-            for(int j = 0; j < i; j++) //loop over pairs (without double-counting, hence j < i)
+            for(int j = 0; j < i; j++) //loop over pairs i,j (without double-counting, hence j < i)
             {
-                //std::cout << "    nb interaction with particle " << j << std::endl;
                 rj = step[s][j];
                 mind_3d(ri, rj, boxes[s], rij); //rij stores return value
                 r = std::sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
-                //std::cout << "    Made it past r calc..." << std::endl;
-                if(r > 3.0)
+                if(r > NB_CUTOFF)
                 { //out of interaction range
                     continue;
                 }
@@ -652,7 +613,6 @@ int main(int argc, char** argv)
                     return EXIT_FAILURE;
                 }
                 phi_p = forces[type[i]][type[j]](r);
-                //std::cout << "    Made it past phi_p calc..." << std::endl;
                 zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
                 if(zbin_ind_i == zbin_ind_j)
                 {
@@ -712,13 +672,9 @@ int main(int argc, char** argv)
             } //end non-bonded interactions
             for(int bo = 0; bo < bonds[i].size(); bo++) //begin bonded interactions
             {
-                //std::cout << "    bonded interaction with particle " << bonds[i][bo] << std::endl;
                 rb = step[s][bonds[i][bo]];
-                //std::cout << "    got rb" << std::endl;
                 mind_3d(ri, rb, boxes[s], rib);
-                //std::cout << "    get rib" << std::endl;
                 r = std::sqrt(rib[0]*rib[0] + rib[1]*rib[1] +rib[2]*rib[2]);
-                //std::cout << "    Made it past r calc..." << std::endl;
                 if(r == 0.0)
                 {
                     std::cout << "Divide by zero in bonded interactions!" << std::endl;
@@ -732,7 +688,6 @@ int main(int argc, char** argv)
                 {
                     phi_p = bend(r, 10.0);
                 }
-                //std::cout << "    Made it past phi_p calc..." << std::endl;
                 zbin_ind_b = int((fold(rb[2],Lz)-zvals[0]+(space/2.0))/space);
                 if(zbin_ind_i == zbin_ind_b)
                 {
@@ -792,15 +747,15 @@ int main(int argc, char** argv)
             }//end bonded interactions
         }//end particle loop
     }//end timestep loop
-    std::cout << "|" << std::endl << std::endl;
+    std::cout << "|" << std::endl << std::endl; //finish progress bar
     
     std::ofstream outfile, stdfile;
     outfile.open(ofname);
     stdfile.open(stdfname);
     
-    //Divide all components by number of timesteps to average
     for(int i = 0; i < n_zvals; i++)
     {
+        //Divide all components by number of timesteps to average
         for(int a = 0; a < 3; a++)
         {
             for(int b = 0; b <= a; b++)
@@ -811,28 +766,21 @@ int main(int argc, char** argv)
             }
         }
         //output to file in same style as before
-        //std::cout << "z= " << zvals[i] << std::endl;
         outfile << "z= " << zvals[i] << std::endl;
         for(int m = 0; m < 9; m++)
         {
-            //std::cout << Sk[i].get(m/3,m%3) << " ";
             outfile << Sk[i].get(m/3,m%3) << " ";
         }
-        //std::cout << std::endl;
         outfile << std::endl;
         for(int m = 0; m < 9; m++)
         {
-            //std::cout << Sb[i].get(m/3,m%3) << " ";
             outfile << Sb[i].get(m/3,m%3) << " ";
         }
-        //std::cout << std::endl;
         outfile << std::endl;
         for(int m = 0; m < 9; m++)
         {
-            //std::cout << Sn[i].get(m/3,m%3) << " ";
             outfile << Sn[i].get(m/3,m%3) << " ";
         }
-        //std::cout << std::endl;
         outfile << std::endl;
     }
     
