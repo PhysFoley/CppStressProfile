@@ -3,8 +3,18 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
-# Default compiler output
+# default compiler output
 a.out
+
+# sample input
+trajectories/
+
+# analysis output
+profile_std.dat
+stress_profile.dat
+
+# test run script
+run.sh
 
 # Node artifact files
 node_modules/

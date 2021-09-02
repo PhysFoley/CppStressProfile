@@ -18,6 +18,7 @@
 #include <fstream>
 #include <cmath>
 #include <vector>
+#include <queue>
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -285,6 +286,8 @@ void split_str(std::string input, std::string delim, std::vector<std::string>* r
 void load_data(std::string filename, std::vector<std::vector<double*> >* step, std::vector<int>* type,
                std::vector<std::vector<int> >* bonds, std::vector<double*>* boxes, int start=0, int stop=-1, int interval=1)
 {
+    std::cout << "Loading trajectory from " << filename << std::endl;
+    
     int update_inter = 100;
     if(stop != -1)
     {
@@ -337,7 +340,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 {
                     if( ((s-start)/interval)%update_inter == 0)
                     {
-                        std::cout << "Loading step " << (s-start)/interval << "..." << std::endl;
+                        std::cout << "Loaded " << (s-start)/interval << " steps..." << std::endl;
                     }
                     step->push_back(std::vector<double*>() );
                     ss = std::stringstream();
@@ -382,7 +385,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
         }
     }
     infile.close();
-    std::cout << "Finished Loading File." << std::endl;
+    std::cout << "Finished Loading File.\n" << std::endl;
 }
 
 //head-head type interactions - 00,55,66,05,06,56
@@ -423,8 +426,6 @@ int main(int argc, char** argv)
     forces[4][6] = forces[6][4] = f01;
     
     forces[5][6] = forces[6][5] = f00;
-    
-    
 
     std::stringstream ss;
     std::string ifname("centered_trajectory.vtf");
@@ -436,7 +437,6 @@ int main(int argc, char** argv)
     int n_zvals = 51;
     double thickness = 10.0;
     double kT = 1.4;
-    //double box_l[] = {17.270,17.270,20.0}; //changed this to fit my new system
 
     for(int i=1; i<argc-1; i+=2)
     {
@@ -497,6 +497,8 @@ int main(int argc, char** argv)
     std::vector<std::vector<int> > bonds;
     std::vector<double*> boxes;
     
+    std::cout << std::endl;
+    
     load_data(ifname, &step, &type, &bonds, &boxes, start, stop, interval);
     
     std::cout << "Loaded:" << std::endl;
@@ -521,9 +523,16 @@ int main(int argc, char** argv)
         }
         else
         {
-            std::cout << "Error: number of boxes and timesteps do not match\n";
+            std::cout << "Error: number of boxes and timesteps do not match";
+            std::cout << std::endl;
             return EXIT_FAILURE;
         }
+    }
+    else if(boxes[0][2] != boxes[1][2])
+    {
+        std::cout << "Error: Box should not fluctuate in z-direction";
+        std::cout << std::endl;
+        return EXIT_FAILURE;
     }
     
     double mean_x = 0.0;
@@ -535,21 +544,20 @@ int main(int argc, char** argv)
     }
     mean_x = mean_x / float(boxes.size());
     mean_y = mean_y / float(boxes.size());
-    std::cout << "Mean X: " << mean_x << std::endl;
-    std::cout << "Mean Y: " << mean_y << std::endl;
+    std::cout << "Mean Lx: " << mean_x << std::endl;
+    std::cout << "Mean Ly: " << mean_y << std::endl;
 
     double space = thickness/(n_zvals-1);
     double* zvals = new double[n_zvals];
     for(int i = 0; i < n_zvals; i++)
     {
-        zvals[i]=((boxes[0][2]/2.0) - (thickness/2.0)) + i*space;
-        std::cout << " " << zvals[i] << " ";
+        zvals[i]= (boxes[0][2]/2.0) - (thickness/2.0) + (i*space);
     }
-    std::cout << std::endl;
-
-    std::ofstream outfile, stdfile;
-    outfile.open(ofname);
-    stdfile.open(stdfname);
+    std::cout << std::endl << "Calculating stress at " << n_zvals
+              << " evenly spaced z values between "
+              << (boxes[0][2]/2.0) - (thickness/2.0)
+              << " and " << (boxes[0][2]/2.0) + (thickness/2.0)
+              << std::endl << std::endl;
 
     Mat3* Sb = new Mat3[n_zvals];
     Mat3* Sn = new Mat3[n_zvals];
@@ -566,9 +574,25 @@ int main(int argc, char** argv)
     double Lz = boxes[0][2]; //assumed to be constant!
     double nb_cutoff = 3.0; //make sure this is larger than longest-range nb interaction range!
     
+    std::cout << "Progress:" << std::endl;
+    std::cout << "start|                    |end" << std::endl;
+    std::cout << "     |";
+    std::cout.flush();
+    
+    std::queue<int> checkpoints;
+    for(int i = 0; i < 20; i++)
+    {
+        checkpoints.push(i*step.size()/20);
+    }
+    
     for(int s = 0; s < step.size(); s++)
     {
-        std::cout << "Working on step " << s << std::endl;
+        if(s == checkpoints.front())
+        {
+            std::cout << "*";
+            std::cout.flush();
+            checkpoints.pop();
+        }
         double A = boxes[s][0]*boxes[s][1];
         for(int i = 0; i < type.size(); i++)
         {
@@ -598,7 +622,7 @@ int main(int argc, char** argv)
                 else if(r == 0.0)
                 {
                     std::cout << "Divide by zero in non-bonded interactions!" << std::endl;
-                    continue;
+                    return EXIT_FAILURE;
                 }
                 phi_p = forces[type[i]][type[j]](r);
                 //std::cout << "    Made it past phi_p calc..." << std::endl;
@@ -671,7 +695,7 @@ int main(int argc, char** argv)
                 if(r == 0.0)
                 {
                     std::cout << "Divide by zero in bonded interactions!" << std::endl;
-                    continue;
+                    return EXIT_FAILURE;
                 }
                 if(std::abs(bonds[i][bo]-i) == 1)
                 {
@@ -741,6 +765,11 @@ int main(int argc, char** argv)
             }//end bonded interactions
         }//end particle loop
     }//end timestep loop
+    std::cout << "|" << std::endl << std::endl;
+    
+    std::ofstream outfile, stdfile;
+    outfile.open(ofname);
+    stdfile.open(stdfname);
     
     //Divide all components by number of timesteps to average
     for(int i = 0; i < n_zvals; i++)
@@ -755,33 +784,37 @@ int main(int argc, char** argv)
             }
         }
         //output to file in same style as before
-        std::cout << "z= " << zvals[i] << std::endl;
+        //std::cout << "z= " << zvals[i] << std::endl;
         outfile << "z= " << zvals[i] << std::endl;
         for(int m = 0; m < 9; m++)
         {
-            std::cout << Sk[i].get(m/3,m%3) << " ";
+            //std::cout << Sk[i].get(m/3,m%3) << " ";
             outfile << Sk[i].get(m/3,m%3) << " ";
         }
-        std::cout << std::endl;
+        //std::cout << std::endl;
         outfile << std::endl;
         for(int m = 0; m < 9; m++)
         {
-            std::cout << Sb[i].get(m/3,m%3) << " ";
+            //std::cout << Sb[i].get(m/3,m%3) << " ";
             outfile << Sb[i].get(m/3,m%3) << " ";
         }
-        std::cout << std::endl;
+        //std::cout << std::endl;
         outfile << std::endl;
         for(int m = 0; m < 9; m++)
         {
-            std::cout << Sn[i].get(m/3,m%3) << " ";
+            //std::cout << Sn[i].get(m/3,m%3) << " ";
             outfile << Sn[i].get(m/3,m%3) << " ";
         }
-        std::cout << std::endl;
+        //std::cout << std::endl;
         outfile << std::endl;
     }
     
     outfile.close();
     stdfile.close();
+    
+    std::cout << "Wrote stress tensor data to: " << ofname << std::endl;
+    std::cout << "Wrote standard deviation to: " << stdfname << std::endl;
+    std::cout << std::endl;
 
     //clean up dynamically allocated memory
     for(unsigned int i = 0; i < step.size(); i++)
