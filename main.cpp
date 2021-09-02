@@ -22,7 +22,6 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
-#include <stdlib.h>
 #include "mat3.hpp"
 
 const double pi = 3.1415926535897;
