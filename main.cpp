@@ -41,8 +41,6 @@ const double NB_CUTOFF = 3.0;
 // Derivatives of Interaction Potentials
 //=========================================================
 
-double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double);
-
 double lj(double r, double b, double rc, double eps)
 {
     if(r <= rc)
@@ -371,6 +369,8 @@ int main(int argc, char** argv)
     // Define Interaction Matrix
     //=========================================================
     
+    double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double);
+    
     forces[0][0] = f00;
     forces[1][1] = f11;
     forces[2][2] = f11;
@@ -551,9 +551,30 @@ int main(int argc, char** argv)
               << " and " << (boxes[0][2]/2.0) + (thickness/2.0)
               << std::endl << std::endl;
 
+    Mat3* Sk = new Mat3[n_zvals];
     Mat3* Sb = new Mat3[n_zvals];
     Mat3* Sn = new Mat3[n_zvals];
-    Mat3* Sk = new Mat3[n_zvals];
+    
+    Mat3* tmp_Sk = new Mat3[n_zvals];
+    Mat3* tmp_Sb = new Mat3[n_zvals];
+    Mat3* tmp_Sn = new Mat3[n_zvals];
+    
+    //arrays for storing step values to be block averaged
+    double*** Sk_vals = new double**[n_zvals];
+    double*** Sb_vals = new double**[n_zvals];
+    double*** Sn_vals = new double**[n_zvals];
+    for(int i = 0; i < n_zvals; i++)
+    {
+        Sk_vals[i] = new double*[9];
+        Sb_vals[i] = new double*[9];
+        Sn_vals[i] = new double*[9];
+        for(int j = 0; j < 9; j++)
+        {
+            Sk_vals[i][j] = new double[step.size()];
+            Sb_vals[i][j] = new double[step.size()];
+            Sn_vals[i][j] = new double[step.size()];
+        }
+    }
     
     double r, phi_p;
     double *ri, *rj, *rb, *rij, *rib, *lo_r, *hi_r;
@@ -565,19 +586,31 @@ int main(int argc, char** argv)
     
     double Lz = boxes[0][2]; //must be constant!
     
+    int n_chkpts = 30; //length of progress bar
+    
     std::cout << "Progress:" << std::endl;
-    std::cout << "start|                    |end" << std::endl;
+    std::cout << "start|";
+    for(int i = 0; i < n_chkpts; i++) { std::cout << " "; }
+    std::cout << "|end" << std::endl;
     std::cout << "     |";
     std::cout.flush();
     
     std::queue<int> checkpoints;
-    for(int i = 0; i < 20; i++)
+    for(int i = 0; i < n_chkpts; i++)
     {
-        checkpoints.push(i*step.size()/20);
+        checkpoints.push(i*step.size()/n_chkpts);
     }
     
     for(int s = 0; s < step.size(); s++)
     {
+        //store value of stress tensor before new calculations
+        for(int m = 0; m < n_zvals; m++)
+        {
+            tmp_Sk[m] = Sk[m];
+            tmp_Sb[m] = Sb[m];
+            tmp_Sn[m] = Sn[m];
+        }
+        //update the progress bar
         if(s == checkpoints.front())
         {
             std::cout << "*";
@@ -746,13 +779,33 @@ int main(int argc, char** argv)
                 }
             }//end bonded interactions
         }//end particle loop
+        
+        //get this step's tensor values and store them for blocking later
+        for(int m = 0; m < n_zvals; m++)
+        {
+            //this_step_val = end_val - begin_val
+            tmp_Sk[m] = Sk[m] - tmp_Sk[m];
+            tmp_Sb[m] = Sb[m] - tmp_Sb[m];
+            tmp_Sn[m] = Sn[m] - tmp_Sn[m];
+            
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
+            {
+                for(int b = 0; b <= a; b++)
+                {
+                    Sk_vals[m][(a*3)+b][s] = tmp_Sk[m].get(a,b);
+                    Sb_vals[m][(a*3)+b][s] = tmp_Sb[m].get(a,b);
+                    Sn_vals[m][(a*3)+b][s] = tmp_Sn[m].get(a,b);
+                }
+            }
+        }
     }//end timestep loop
     std::cout << "|" << std::endl << std::endl; //finish progress bar
     
     std::ofstream outfile, stdfile;
-    outfile.open(ofname);
-    stdfile.open(stdfname);
     
+    outfile.open(ofname);
+    //average the stress tensor and write to file
     for(int i = 0; i < n_zvals; i++)
     {
         //Divide all components by number of timesteps to average
@@ -783,10 +836,33 @@ int main(int argc, char** argv)
         }
         outfile << std::endl;
     }
-    
     outfile.close();
+    
+    stdfile.open(stdfname);
+    std::cout << "Calculating error on mean by block averaging..." << std::endl;
+    //calculate standard dev via blocking and write to file
+    for(int i = 0; i < n_zvals; i++)
+    {
+        stdfile << "z= " << zvals[i] << std::endl;
+        for(int j = 0; j < 9; j++)
+        {
+            stdfile << err_on_mean(Sk_vals[i][j], step.size()) << " ";
+        }
+        stdfile << std::endl;
+        for(int j = 0; j < 9; j++)
+        {
+            stdfile << err_on_mean(Sb_vals[i][j], step.size()) << " ";
+        }
+        stdfile << std::endl;
+        for(int j = 0; j < 9; j++)
+        {
+            stdfile << err_on_mean(Sn_vals[i][j], step.size()) << " ";
+        }
+        stdfile << std::endl;
+    }
     stdfile.close();
     
+    std::cout << std::endl;
     std::cout << "Wrote stress tensor data to: " << ofname << std::endl;
     std::cout << "Wrote standard deviation to: " << stdfname << std::endl;
     std::cout << std::endl;
@@ -799,6 +875,21 @@ int main(int argc, char** argv)
             delete[] step[i][j];
         }
     }
+    for(int i = 0; i < n_zvals; i++)
+    {
+        for(int j = 0; j < 9; j++)
+        {
+            delete[] Sk_vals[i][j];
+            delete[] Sb_vals[i][j];
+            delete[] Sn_vals[i][j];
+        }
+        delete[] Sk_vals[i];
+        delete[] Sb_vals[i];
+        delete[] Sn_vals[i];
+    }
+    delete[] Sk_vals;
+    delete[] Sb_vals;
+    delete[] Sn_vals;
     if(NVT)
     {
         delete[] boxes[0];
@@ -814,6 +905,9 @@ int main(int argc, char** argv)
     delete[] Sb;
     delete[] Sk;
     delete[] Sn;
+    delete[] tmp_Sb;
+    delete[] tmp_Sk;
+    delete[] tmp_Sn;
 
     return 0;
 }

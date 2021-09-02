@@ -33,6 +33,26 @@ Mat3& Mat3::operator=(const Mat3& mat)
     return *this;
 }
 
+Mat3 Mat3::operator+(const Mat3& mat) const
+{
+    Mat3 sum;
+    for(int i=0; i<9; i++)
+    {
+        sum.vals[i] = this->vals[i] + mat.vals[i];
+    }
+    return sum;
+}
+
+Mat3 Mat3::operator-(const Mat3& mat) const
+{
+    Mat3 diff;
+    for(int i=0; i<9; i++)
+    {
+        diff.vals[i] = this->vals[i] - mat.vals[i];
+    }
+    return diff;
+}
+
 double Mat3::get(int row, int col) const
 {
     return this->vals[row*3 + col];
