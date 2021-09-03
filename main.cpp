@@ -490,6 +490,7 @@ int main(int argc, char** argv)
     std::cout << "       " << type.size() << " particles" << std::endl;
     std::cout << "       " << step.size() << " timesteps" << std::endl;
     std::cout << "       " << boxes.size() << " box geometries" << std::endl;
+    std::cout << std::endl << std::endl;
     
     if(boxes.size() == 0 || type.size() == 0 || step.size() == 0)
     {
@@ -503,8 +504,9 @@ int main(int argc, char** argv)
     {
         if(boxes.size() == 1)
         {
+            std::cout << "Only one box geometry found." << std::endl;
             std::cout << "Assuming constant volume {" << boxes[0][0] << ", "
-                      << boxes[0][1] << ", " << boxes[0][2] << "}\n";
+                      << boxes[0][1] << ", " << boxes[0][2] << "}\n\n";
             
             NVT = true;
             for(int i = 1; i < step.size(); i++)
@@ -544,11 +546,11 @@ int main(int argc, char** argv)
     {
         zvals[i]= (boxes[0][2]/2.0) - (thickness/2.0) + (i*space);
     }
-    std::cout << std::endl << "Calculating stress at " << n_zvals
-              << " evenly spaced z values between "
-              << (boxes[0][2]/2.0) - (thickness/2.0)
-              << " and " << (boxes[0][2]/2.0) + (thickness/2.0)
-              << std::endl << std::endl;
+    std::cout << std::endl << "Calculating stress at " << n_zvals;
+    std::cout << " evenly spaced z values between ";
+    std::cout << (boxes[0][2]/2.0) - (thickness/2.0);
+    std::cout << " and " << (boxes[0][2]/2.0) + (thickness/2.0);
+    std::cout << std::endl << std::endl;
 
     Mat3* Sk = new Mat3[n_zvals];
     Mat3* Sb = new Mat3[n_zvals];
@@ -836,6 +838,7 @@ int main(int argc, char** argv)
         outfile << std::endl;
     }
     outfile.close();
+    std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
     
     stdfile.open(stdfname);
     std::cout << "Calculating error on mean by block averaging..." << std::endl;
@@ -861,9 +864,7 @@ int main(int argc, char** argv)
     }
     stdfile.close();
     
-    std::cout << std::endl;
-    std::cout << "Wrote stress tensor data to: " << ofname << std::endl;
-    std::cout << "Wrote standard deviation to: " << stdfname << std::endl;
+    std::cout << "Wrote standard deviations to: " << stdfname << std::endl;
     std::cout << std::endl;
 
     //clean up dynamically allocated memory
