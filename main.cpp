@@ -560,20 +560,14 @@ int main(int argc, char** argv)
     Mat3* tmp_Sb = new Mat3[n_zvals];
     Mat3* tmp_Sn = new Mat3[n_zvals];
     
-    //arrays for storing step values to be block averaged
-    double*** Sk_vals = new double**[n_zvals];
-    double*** Sb_vals = new double**[n_zvals];
-    double*** Sn_vals = new double**[n_zvals];
+    //array for storing step values to be block averaged
+    double*** S_vals = new double**[n_zvals];
     for(int i = 0; i < n_zvals; i++)
     {
-        Sk_vals[i] = new double*[9];
-        Sb_vals[i] = new double*[9];
-        Sn_vals[i] = new double*[9];
+        S_vals[i] = new double*[9];
         for(int j = 0; j < 9; j++)
         {
-            Sk_vals[i][j] = new double[step.size()];
-            Sb_vals[i][j] = new double[step.size()];
-            Sn_vals[i][j] = new double[step.size()];
+            S_vals[i][j] = new double[step.size()];
         }
     }
     
@@ -629,7 +623,7 @@ int main(int argc, char** argv)
                 //make sure the particle is within the domain we're treating
                 if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
                 {
-                    Sk[zbin_ind_i].set(k,k,Sk[zbin_ind_i].get(k,k)+temp);
+                    Sk[zbin_ind_i].set(k,k,Sk[zbin_ind_i].get(k,k)-temp);
                 }
             }
             for(int j = 0; j < i; j++) //loop over pairs i,j (without double-counting, hence j < i)
@@ -659,7 +653,7 @@ int main(int argc, char** argv)
                             for(int b = 0; b <= a; b++)
                             {
                                 temp = rij[a]*rij[b]*phi_p/(A*space*r);
-                                Sn[zbin_ind_i].set(a,b,Sn[zbin_ind_i].get(a,b)-temp);
+                                Sn[zbin_ind_i].set(a,b,Sn[zbin_ind_i].get(a,b)+temp);
                             }
                         }
                     }
@@ -697,7 +691,7 @@ int main(int argc, char** argv)
                                     temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
                                     if(m == lo_ind) { temp = temp * lo_factor; }
                                     if(m == hi_ind) { temp = temp * hi_factor; }
-                                    Sn[m].set(a,b,Sn[m].get(a,b)-temp);
+                                    Sn[m].set(a,b,Sn[m].get(a,b)+temp);
                                 }
                             }
                         }
@@ -734,7 +728,7 @@ int main(int argc, char** argv)
                             for(int b = 0; b <= a; b++)
                             {
                                 temp = rib[a]*rib[b]*phi_p/(A*space*r);
-                                Sb[zbin_ind_i].set(a,b,Sb[zbin_ind_i].get(a,b)-temp);
+                                Sb[zbin_ind_i].set(a,b,Sb[zbin_ind_i].get(a,b)+temp);
                             }
                         }
                     }
@@ -772,7 +766,7 @@ int main(int argc, char** argv)
                                     temp = 0.5*rib[a]*rib[b]*phi_p/(A*std::abs(rib[2])*r);
                                     if(m == lo_ind) { temp = temp * lo_factor; }
                                     if(m == hi_ind) { temp = temp * hi_factor; }
-                                    Sb[m].set(a,b,Sb[m].get(a,b)-temp);
+                                    Sb[m].set(a,b,Sb[m].get(a,b)+temp);
                                 }
                             }
                         }
@@ -794,9 +788,9 @@ int main(int argc, char** argv)
             {
                 for(int b = 0; b <= a; b++)
                 {
-                    Sk_vals[m][(a*3)+b][s] = tmp_Sk[m].get(a,b);
-                    Sb_vals[m][(a*3)+b][s] = tmp_Sb[m].get(a,b);
-                    Sn_vals[m][(a*3)+b][s] = tmp_Sn[m].get(a,b);
+                    S_vals[m][(a*3)+b][s] = tmp_Sk[m].get(a,b) + tmp_Sb[m].get(a,b) + tmp_Sn[m].get(a,b);
+                    //Sb_vals[m][(a*3)+b][s] = tmp_Sb[m].get(a,b);
+                    //Sn_vals[m][(a*3)+b][s] = tmp_Sn[m].get(a,b);
                 }
             }
         }
@@ -848,17 +842,7 @@ int main(int argc, char** argv)
         stdfile << "z= " << zvals[i] << std::endl;
         for(int j = 0; j < 9; j++)
         {
-            stdfile << err_on_mean(Sk_vals[i][j], step.size()) << " ";
-        }
-        stdfile << std::endl;
-        for(int j = 0; j < 9; j++)
-        {
-            stdfile << err_on_mean(Sb_vals[i][j], step.size()) << " ";
-        }
-        stdfile << std::endl;
-        for(int j = 0; j < 9; j++)
-        {
-            stdfile << err_on_mean(Sn_vals[i][j], step.size()) << " ";
+            stdfile << err_on_mean(S_vals[i][j], step.size()) << " ";
         }
         stdfile << std::endl;
     }
@@ -879,17 +863,11 @@ int main(int argc, char** argv)
     {
         for(int j = 0; j < 9; j++)
         {
-            delete[] Sk_vals[i][j];
-            delete[] Sb_vals[i][j];
-            delete[] Sn_vals[i][j];
+            delete[] S_vals[i][j];
         }
-        delete[] Sk_vals[i];
-        delete[] Sb_vals[i];
-        delete[] Sn_vals[i];
+        delete[] S_vals[i];
     }
-    delete[] Sk_vals;
-    delete[] Sb_vals;
-    delete[] Sn_vals;
+    delete[] S_vals;
     if(NVT)
     {
         delete[] boxes[0];
