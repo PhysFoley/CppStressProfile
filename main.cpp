@@ -789,8 +789,6 @@ int main(int argc, char** argv)
                 for(int b = 0; b <= a; b++)
                 {
                     S_vals[m][(a*3)+b][s] = tmp_Sk[m].get(a,b) + tmp_Sb[m].get(a,b) + tmp_Sn[m].get(a,b);
-                    //Sb_vals[m][(a*3)+b][s] = tmp_Sb[m].get(a,b);
-                    //Sn_vals[m][(a*3)+b][s] = tmp_Sn[m].get(a,b);
                 }
             }
         }
