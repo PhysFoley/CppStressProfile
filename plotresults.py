@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 from scipy.integrate import simps
 
 # put all the input files here if you broke the trajectory up
-filenames = ["stress_profile.dat"]
+filenames = ["stress_profile.dat"] # e.g. ["file1.dat","file2.dat","file3.dat"]
 
 # same as above but for standard error files
 errfiles = ["profile_std.dat"]
@@ -105,16 +105,22 @@ print("Lower leaflet tension: {}".format(lower_tension))
 print("Total membrane tension: {}".format(full_tension))
 
 plt.axhline(linewidth=1, color="black")
+plt.axvline(linewidth=1, linestyle=":", color="black")
+
+shift = zvals[half]
 
 # z values for plotting the spline
 zz = np.linspace(zvals[0], zvals[-1], 1000)
 
 # plot the main splines
-plt.plot(zz, p_cs(zz) , zz, z_cs(zz) )
+plt.plot(zz-shift, p_cs(zz) , zz-shift, z_cs(zz) )
 
 #shade in the error regions
-plt.fill_between(zz, p_me_cs(zz), p_pe_cs(zz), alpha=0.5)
-plt.fill_between(zz, z_me_cs(zz), z_pe_cs(zz), alpha=0.5)
+plt.fill_between(zz-shift, p_me_cs(zz), p_pe_cs(zz), alpha=0.5)
+plt.fill_between(zz-shift, z_me_cs(zz), z_pe_cs(zz), alpha=0.5)
+
+plt.xlabel(r"$z$ (from mid-plane) $[\sigma]$")
+plt.ylabel(r"Lateral Stress $\partial\Sigma/\partial z$ $[\varepsilon/\sigma^3]$")
 
 # plot the raw data
 #plt.errorbar(zvals, tot_profile, yerr=tot_profile_err, linestyle="none")
