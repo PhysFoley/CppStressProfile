@@ -832,6 +832,28 @@ int main(int argc, char** argv)
     outfile.close();
     std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
     
+    std::string tfname = "timestep_data.dat";
+    std::cout << "Writing timestep data to file " << tfname << std::endl;
+    std::ofstream tsfile;
+    tsfile.open(tfname);
+    for(int i = 0; i < n_zvals; i++)
+    {
+        tsfile << "z= " << zvals[i] << std::endl;
+        for(int j = 0; j < 9; j++)
+        {
+            // only output for xx, yy, zz
+            if( (j == 0) || (j == 4) || (j == 8) )
+            {
+                for(int k = 0; k < step.size(); k++)
+                {
+                    tsfile << S_vals[i][j][k] << " ";
+                }
+                tsfile << std::endl;
+            }
+        }
+    }
+    tsfile.close();
+    
     stdfile.open(stdfname);
     std::cout << "Calculating error on mean by block averaging..." << std::endl;
     //calculate standard dev via blocking and write to file
