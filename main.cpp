@@ -833,7 +833,7 @@ int main(int argc, char** argv)
     std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
     
     std::string tfname = "timestep_data.dat";
-    std::cout << "Writing timestep data to file " << tfname << std::endl;
+    std::cout << "Writing timestep data to file " << tfname << std::endl;    
     std::ofstream tsfile;
     tsfile.open(tfname);
     for(int i = 0; i < n_zvals; i++)
@@ -899,6 +899,8 @@ int main(int argc, char** argv)
             delete[] boxes[i];
         }
     }
+    delete[] rij;
+    delete[] rib;
     delete[] zvals;
     delete[] Sb;
     delete[] Sk;

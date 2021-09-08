@@ -24,13 +24,14 @@ ts_data = np.array(ts_data)
 spec_z = [4, 7, 12, 17]
 
 fig, axs = plt.subplots(nrows=4,ncols=3)
+fig.suptitle("Error on Mean (relative to naive EoM) vs Number of Block Averages")
 
 for i in range(len(spec_z)):
     axs[i][0].set_ylabel("z = {}".format(zvals[spec_z[i]]))
     for j in range(3):
         mu, c, sig, dsig = block_from_nparray(ts_data[(3*spec_z[i])+j],verbose=False)
         print("z={}, comp {}: Mean {}, Max Err {}".format(zvals[spec_z[i]],j,mu,np.amax(sig)))
-        axs[i][j].errorbar(np.arange(len(sig)),sig,yerr=dsig)
+        axs[i][j].errorbar(np.arange(len(sig)),sig/sig[0],yerr=dsig/sig[0])
     print("\n")
 
 plt.show(block=False)
