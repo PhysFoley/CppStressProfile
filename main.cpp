@@ -877,6 +877,8 @@ int main(int argc, char** argv)
             delete[] boxes[i];
         }
     }
+    delete[] rij;
+    delete[] rib;
     delete[] zvals;
     delete[] Sb;
     delete[] Sk;

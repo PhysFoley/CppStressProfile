@@ -16,6 +16,7 @@ trajectories/
 # analysis output
 profile_std.dat
 stress_profile.dat
+timestep_data.dat
 
 # test run script
 run.sh
