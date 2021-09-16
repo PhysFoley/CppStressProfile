@@ -7,7 +7,7 @@ from scipy.integrate import simps
 filenames = ["stress_profile.dat"] # e.g. ["file1.dat","file2.dat","file3.dat"]
 
 # same as above but for standard error files
-errfiles = ["real_profile_seom.dat"]
+errfiles = ["profile_eom.dat"]
 
 zvals = []
 lat_profile = []
