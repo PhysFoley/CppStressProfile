@@ -413,7 +413,8 @@ int main(int argc, char** argv)
     std::stringstream ss;
     std::string ifname("centered_trajectory.vtf");
     std::string ofname("stress_profile.dat");
-    std::string stdfname("profile_std.dat");
+    std::string tfname("timestep_data.dat");
+    std::string stdfname("pessimistic_profile_std.dat");
     int start = 0;
     int stop = -1;
     int interval = 1;
@@ -462,10 +463,16 @@ int main(int argc, char** argv)
             ss >> stdfname;
             ss.clear();
         }
-        else if(std::string(argv[i]).compare("-t") == 0)
+        else if(std::string(argv[i]).compare("-d") == 0)
         {
             ss << argv[i+1];
             ss >> thickness;
+            ss.clear();
+        }
+        else if(std::string(argv[i]).compare("-t") == 0)
+        {
+            ss << argv[i+1];
+            ss >> tfname;
             ss.clear();
         }
         else if(std::string(argv[i]).compare("-T") == 0)
@@ -797,6 +804,9 @@ int main(int argc, char** argv)
     
     std::ofstream outfile, stdfile;
     
+    //indices of lower-triangular matrix elements
+    int indices[] = {0, 4, 8, 3, 6, 7};
+    
     outfile.open(ofname);
     //average the stress tensor and write to file
     for(int i = 0; i < n_zvals; i++)
@@ -811,65 +821,64 @@ int main(int argc, char** argv)
                 Sk[i].set(a,b,Sk[i].get(a,b)/float(step.size()));
             }
         }
-        //output to file in same style as before
+        //output to file: xx, yy, zz, yx, zx, zy
         outfile << "z= " << zvals[i] << std::endl;
-        for(int m = 0; m < 9; m++)
+        for(int m = 0; m < 6; m++)
         {
-            outfile << Sk[i].get(m/3,m%3) << " ";
+            outfile << Sk[i].get(indices[m]/3,indices[m]%3) << " ";
         }
         outfile << std::endl;
-        for(int m = 0; m < 9; m++)
+        for(int m = 0; m < 6; m++)
         {
-            outfile << Sb[i].get(m/3,m%3) << " ";
+            outfile << Sb[i].get(indices[m]/3,indices[m]%3) << " ";
         }
         outfile << std::endl;
-        for(int m = 0; m < 9; m++)
+        for(int m = 0; m < 6; m++)
         {
-            outfile << Sn[i].get(m/3,m%3) << " ";
+            outfile << Sn[i].get(indices[m]/3,indices[m]%3) << " ";
         }
         outfile << std::endl;
     }
     outfile.close();
     std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
     
-    std::string tfname = "timestep_data.dat";
     std::cout << "Writing timestep data to file " << tfname << std::endl;    
     std::ofstream tsfile;
     tsfile.open(tfname);
     for(int i = 0; i < n_zvals; i++)
     {
         tsfile << "z= " << zvals[i] << std::endl;
-        for(int j = 0; j < 9; j++)
+        // output for xx, yy, zz, yx, zx, zy
+        for(int j = 0; j < 6; j++)
         {
-            // only output for xx, yy, zz
-            if( (j == 0) || (j == 4) || (j == 8) )
+            for(int k = 0; k < step.size(); k++)
             {
-                for(int k = 0; k < step.size(); k++)
-                {
-                    tsfile << S_vals[i][j][k] << " ";
-                }
-                tsfile << std::endl;
+                tsfile << S_vals[i][indices[j]][k] << " ";
             }
+            tsfile << std::endl;
         }
     }
     tsfile.close();
     
+    /*
     stdfile.open(stdfname);
     std::cout << "Calculating error on mean by block averaging..." << std::endl;
-    //calculate standard dev via blocking and write to file
+    //calculate error on mean via blocking and write to file
     for(int i = 0; i < n_zvals; i++)
     {
         stdfile << "z= " << zvals[i] << std::endl;
-        for(int j = 0; j < 9; j++)
+        // output for xx, yy, zz, yx, zx, zy
+        for(int j = 0; j < 6; j++)
         {
-            stdfile << err_on_mean(S_vals[i][j], step.size()) << " ";
+            stdfile << err_on_mean(S_vals[i][indices[j]], step.size()) << " ";
         }
         stdfile << std::endl;
     }
     stdfile.close();
     
-    std::cout << "Wrote standard deviations to: " << stdfname << std::endl;
+    std::cout << "Wrote Standard EoM to: " << stdfname << std::endl;
     std::cout << std::endl;
+    */
 
     //clean up dynamically allocated memory
     for(unsigned int i = 0; i < step.size(); i++)

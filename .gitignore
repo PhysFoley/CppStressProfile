@@ -9,6 +9,7 @@ stresscalc
 
 # some analysis stuff
 full_err_plot.py
+blockplots.py
 
 # sample input
 trajectories/
@@ -17,6 +18,7 @@ trajectories/
 profile_std.dat
 stress_profile.dat
 timestep_data.dat
+profile_eom.dat
 
 # test run script
 run.sh

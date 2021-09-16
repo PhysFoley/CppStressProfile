@@ -7,7 +7,7 @@ from scipy.integrate import simps
 filenames = ["stress_profile.dat"] # e.g. ["file1.dat","file2.dat","file3.dat"]
 
 # same as above but for standard error files
-errfiles = ["profile_std.dat"]
+errfiles = ["real_profile_seom.dat"]
 
 zvals = []
 lat_profile = []
@@ -25,8 +25,8 @@ with open(filenames[0],"r") as infile:
                 Szz_profile.append(0.0)
             else:
                 t = [float(x) for x in t]
-                lat_profile[-1].append( (0.5*(t[0]+t[4]) - t[8])/float(n_files) )
-                Szz_profile[-1] += t[8]/float(n_files)
+                lat_profile[-1].append( (0.5*(t[0]+t[1]) - t[2])/float(n_files) )
+                Szz_profile[-1] += t[2]/float(n_files)
 
 # now read in the rest of the data files and add their contributions
 for fname in filenames[1:]:
@@ -41,8 +41,8 @@ for fname in filenames[1:]:
                     kbn_index = 0
                 else:
                     t = [float(x) for x in t]
-                    lat_profile[z_index][kbn_index] += (0.5*(t[0]+t[4]) - t[8])/float(n_files)
-                    Szz_profile[z_index] += t[8]/float(n_files)
+                    lat_profile[z_index][kbn_index] += (0.5*(t[0]+t[1]) - t[2])/float(n_files)
+                    Szz_profile[z_index] += t[2]/float(n_files)
                     kbn_index += 1
 
 lat_profile = np.array(lat_profile).transpose()
@@ -66,8 +66,8 @@ for i in range(n_files):
                     z_index += 1
                 else:
                     t = [float(x) for x in t]
-                    profile_err[i][z_index] = np.sqrt( 0.25*(t[0]**2 + t[4]**2) + t[8]**2 )
-                    z_err[i][z_index] = t[8]
+                    profile_err[i][z_index] = np.sqrt( 0.25*(t[0]**2 + t[1]**2) + t[2]**2 )
+                    z_err[i][z_index] = t[2]
 
 tot_profile_err = []
 tot_z_err = []
