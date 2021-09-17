@@ -15,6 +15,7 @@
 *******************************************************************************/
 
 #include <iostream>
+#include <cstdlib>
 #include <fstream>
 #include <cmath>
 #include <vector>
@@ -83,7 +84,6 @@ double ljcos2(double r, double b, double eps, double rc, double wc)
     return lj(r, b, rc, eps) + cos2(r, rc, wc, eps);
 }
 
-//head-head type interactions - 00,55,66,05,06,56
 double f00(double r)
 {
     if(r <= 0.95*std::pow(2.0,1.0/6.0) )
@@ -96,7 +96,6 @@ double f00(double r)
     }
 }
 
-//head-tail interactions - 01,51,61,02,03,04,52,53,54,62,63,64
 double f01(double r)
 {
     if(r <= 0.95*std::pow(2.0,1.0/6.0) )
@@ -109,13 +108,11 @@ double f01(double r)
     }
 }
 
-//attractive tail-tail interactions - 11,12,13,14,22,24,33,34,44
 double f11(double r)
 {
     return lj(r, 1.0, std::pow(2.0,1.0/6.0), 1.0) + cos2(r, std::pow(2.0,1.0/6.0), 1.6, 1.0);
 }
 
-//modified middle-middle interaction - not ljcos2
 double f23(double r)
 {
     if(r <= std::pow(2.0,1.0/6.0) )
@@ -159,61 +156,6 @@ void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
 }
 
 //=========================================================
-// Blocking Algorithm
-//=========================================================
-
-// takes an array of doubles and its length n
-// returns standard deviation of array (unbiased estimator)
-double stdev(double *vals, int n)
-{
-    double sum = 0.0;
-    double sumsq = 0.0;
-    for(int i=0; i<n; i++)
-    {
-        sum += vals[i];
-        sumsq += vals[i]*vals[i];
-    }
-    float N = float(n);
-    return std::sqrt( (sumsq/(N-1.0)) - (sum*sum/(N*(N-1.0))) );
-}
-
-// takes an array of doubles and its length n
-// blocks the array in-place, so that the array
-// variable passed in now contains as its elements
-// the averages of neighboring pairs of values
-// that were originally in the array, and hence there
-// are now half as many elements
-// returns the number of elements that are now meaningful
-// in the array
-int block(double *vals, int n)
-{
-    for(int i=0; i<n/2; i++)
-    {
-        vals[i] = (vals[2*i] + vals[(2*i)+1]) / 2.0;
-    }
-    return n/2;
-}
-
-// takes an array of doubles and its length n
-// returns blocked error on mean (est of std of dist of mean)
-// WARNING: modifies vals IN PLACE; destroys array contents
-double err_on_mean(double *vals, int n)
-{
-    double maxsig = 0.0;
-    double sig = 0.0;
-    while(n > 2)
-    {
-        sig = stdev(vals, n)/std::sqrt(float(n) - 1.0);
-        if(sig > maxsig)
-        {
-            maxsig = sig;
-        }
-        n = block(vals, n);
-    }
-    return maxsig;
-}
-
-//=========================================================
 // Trajectory Data Load Functions
 //=========================================================
 
@@ -238,7 +180,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                std::vector<std::vector<int> >* bonds, std::vector<double*>* boxes, int start=0, int stop=-1, int interval=1)
 {
     std::cout << "Loading trajectory from " << filename << std::endl;
-    
+
     int update_inter = 100;
     if(stop != -1)
     {
@@ -248,7 +190,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
     infile.open(filename);
     std::string line;
     std::vector<std::string> t;
-    
+
     double* init_box;
 
     std::stringstream ss;
@@ -302,7 +244,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
             else if(t[0].compare("unitcell") == 0)
             {
                 double* box_l = new double[3];
-                
+
                 ss.clear();
                 ss << t[1];
                 ss >> box_l[0];
@@ -310,7 +252,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss >> box_l[1];
                 ss << t[3];
                 ss >> box_l[2];
-                
+
                 if(s == -1)
                 {
                     init_box = box_l;
@@ -337,7 +279,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss.clear();
                 ss << t[3];
                 ss >> coord[2];
-                
+
                 if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     step->back().push_back(coord);
@@ -350,26 +292,23 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
         }
     }
     infile.close();
-    
+
     if(boxes->size() == 0)
     {
         boxes->push_back(init_box);
     }
-    
+
     std::cout << "Finished Loading File.\n" << std::endl;
 }
 
-//head-head type interactions - 00,55,66,05,06,56
-//head-tail interactions - 01,51,61,02,03,04,52,53,54,62,63,64
-//attractive tail-tail interactions - 11,12,13,14,22,24,33,34,44
 int main(int argc, char** argv)
 {
     //=========================================================
     // Define Interaction Matrix
     //=========================================================
-    
+
     double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double);
-    
+
     forces[0][0] = f00;
     forces[1][1] = f11;
     forces[2][2] = f11;
@@ -395,13 +334,13 @@ int main(int argc, char** argv)
     forces[2][4] = forces[4][2] = f11;
     forces[2][5] = forces[5][2] = f01;
     forces[2][6] = forces[6][2] = f01;
-    
+
     forces[3][4] = forces[4][3] = f11;
     forces[3][5] = forces[5][3] = f01;
     forces[3][6] = forces[6][3] = f01;
     forces[4][5] = forces[5][4] = f01;
     forces[4][6] = forces[6][4] = f01;
-    
+
     forces[5][6] = forces[6][5] = f00;
 
     //=========================================================
@@ -414,7 +353,6 @@ int main(int argc, char** argv)
     std::string ifname("centered_trajectory.vtf");
     std::string ofname("stress_profile.dat");
     std::string tfname("timestep_data.dat");
-    std::string stdfname("pessimistic_profile_std.dat");
     int start = 0;
     int stop = -1;
     int interval = 1;
@@ -457,12 +395,6 @@ int main(int argc, char** argv)
             ss >> n_zvals;
             ss.clear();
         }
-        else if(std::string(argv[i]).compare("-s") == 0)
-        {
-            ss << argv[i+1];
-            ss >> stdfname;
-            ss.clear();
-        }
         else if(std::string(argv[i]).compare("-d") == 0)
         {
             ss << argv[i+1];
@@ -487,26 +419,26 @@ int main(int argc, char** argv)
     std::vector<int> type;
     std::vector<std::vector<int> > bonds;
     std::vector<double*> boxes;
-    
+
     std::cout << std::endl;
-    
+
     bool NVT = false; //default assumption, to be checked later
     load_data(ifname, &step, &type, &bonds, &boxes, start, stop, interval);
-    
+
     std::cout << "Loaded:" << std::endl;
     std::cout << "       " << type.size() << " particles" << std::endl;
     std::cout << "       " << step.size() << " timesteps" << std::endl;
     std::cout << "       " << boxes.size() << " box geometries" << std::endl;
     std::cout << std::endl << std::endl;
-    
+
     if(boxes.size() == 0 || type.size() == 0 || step.size() == 0)
     {
         std::cout << "Error reading trajectory, failed to load "
                   << "particles/timesteps/boxes" << std::endl;
-        
+
         return EXIT_FAILURE;
     }
-    
+
     if(boxes.size() != step.size())
     {
         if(boxes.size() == 1)
@@ -514,7 +446,7 @@ int main(int argc, char** argv)
             std::cout << "Only one box geometry found." << std::endl;
             std::cout << "Assuming constant volume {" << boxes[0][0] << ", "
                       << boxes[0][1] << ", " << boxes[0][2] << "}\n\n";
-            
+
             NVT = true;
             for(int i = 1; i < step.size(); i++)
             {
@@ -534,7 +466,7 @@ int main(int argc, char** argv)
         std::cout << std::endl;
         return EXIT_FAILURE;
     }
-    
+
     double mean_x = 0.0;
     double mean_y = 0.0;
     for(int i=0; i < boxes.size(); i++)
@@ -562,11 +494,11 @@ int main(int argc, char** argv)
     Mat3* Sk = new Mat3[n_zvals];
     Mat3* Sb = new Mat3[n_zvals];
     Mat3* Sn = new Mat3[n_zvals];
-    
+
     Mat3* tmp_Sk = new Mat3[n_zvals];
     Mat3* tmp_Sb = new Mat3[n_zvals];
     Mat3* tmp_Sn = new Mat3[n_zvals];
-    
+
     //array for storing step values to be block averaged
     double*** S_vals = new double**[n_zvals];
     for(int i = 0; i < n_zvals; i++)
@@ -577,32 +509,32 @@ int main(int argc, char** argv)
             S_vals[i][j] = new double[step.size()];
         }
     }
-    
+
     double r, phi_p;
     double *ri, *rj, *rb, *rij, *rib, *lo_r, *hi_r;
     double temp; // for storing temporary values
     int zbin_ind_i, zbin_ind_j, zbin_ind_b;
-    
+
     rij = new double[3];
     rib = new double[3];
-    
+
     double Lz = boxes[0][2]; //must be constant!
-    
+
     int n_chkpts = 30; //length of progress bar
-    
+
     std::cout << "Progress:" << std::endl;
     std::cout << "start|";
     for(int i = 0; i < n_chkpts; i++) { std::cout << " "; }
     std::cout << "|end" << std::endl;
     std::cout << "     |";
     std::cout.flush();
-    
+
     std::queue<int> checkpoints;
     for(int i = 0; i < n_chkpts; i++)
     {
         checkpoints.push(i*step.size()/n_chkpts);
     }
-    
+
     for(int s = 0; s < step.size(); s++)
     {
         //store value of stress tensor before new calculations
@@ -679,11 +611,11 @@ int main(int argc, char** argv)
                     }
                     int lo_ind = std::min(zbin_ind_i,zbin_ind_j);
                     int hi_ind = std::max(zbin_ind_i,zbin_ind_j);
-                    
+
                     //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
                     double lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
                     double hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
-                    
+
                     //loop over z slabs between particles i and j
                     for(int m = lo_ind; m <= hi_ind; m++)
                     {
@@ -745,7 +677,7 @@ int main(int argc, char** argv)
                     if(zbin_ind_i < zbin_ind_b)
                     {
                         lo_r = ri;
-                        hi_r = rb;  
+                        hi_r = rb;
                     }
                     else
                     {
@@ -754,11 +686,11 @@ int main(int argc, char** argv)
                     }
                     int lo_ind = std::min(zbin_ind_i,zbin_ind_b);
                     int hi_ind = std::max(zbin_ind_i,zbin_ind_b);
-                    
+
                     //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
                     double lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
                     double hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
-                    
+
                     //loop over z slabs between particles i and j
                     for(int m = lo_ind; m <= hi_ind; m++)
                     {
@@ -781,7 +713,7 @@ int main(int argc, char** argv)
                 }
             }//end bonded interactions
         }//end particle loop
-        
+
         //get this step's tensor values and store them for blocking later
         for(int m = 0; m < n_zvals; m++)
         {
@@ -789,7 +721,7 @@ int main(int argc, char** argv)
             tmp_Sk[m] = Sk[m] - tmp_Sk[m];
             tmp_Sb[m] = Sb[m] - tmp_Sb[m];
             tmp_Sn[m] = Sn[m] - tmp_Sn[m];
-            
+
             //loop over tensor components
             for(int a = 0; a < 3; a++)
             {
@@ -801,12 +733,12 @@ int main(int argc, char** argv)
         }
     }//end timestep loop
     std::cout << "|" << std::endl << std::endl; //finish progress bar
-    
-    std::ofstream outfile, stdfile;
-    
+
+    std::ofstream outfile;
+
     //indices of lower-triangular matrix elements
     int indices[] = {0, 4, 8, 3, 6, 7};
-    
+
     outfile.open(ofname);
     //average the stress tensor and write to file
     for(int i = 0; i < n_zvals; i++)
@@ -841,8 +773,8 @@ int main(int argc, char** argv)
     }
     outfile.close();
     std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
-    
-    std::cout << "Writing timestep data to file " << tfname << std::endl;    
+
+    std::cout << "Writing timestep data to file " << tfname << std::endl;
     std::ofstream tsfile;
     tsfile.open(tfname);
     for(int i = 0; i < n_zvals; i++)
@@ -859,26 +791,6 @@ int main(int argc, char** argv)
         }
     }
     tsfile.close();
-    
-    /*
-    stdfile.open(stdfname);
-    std::cout << "Calculating error on mean by block averaging..." << std::endl;
-    //calculate error on mean via blocking and write to file
-    for(int i = 0; i < n_zvals; i++)
-    {
-        stdfile << "z= " << zvals[i] << std::endl;
-        // output for xx, yy, zz, yx, zx, zy
-        for(int j = 0; j < 6; j++)
-        {
-            stdfile << err_on_mean(S_vals[i][indices[j]], step.size()) << " ";
-        }
-        stdfile << std::endl;
-    }
-    stdfile.close();
-    
-    std::cout << "Wrote Standard EoM to: " << stdfname << std::endl;
-    std::cout << std::endl;
-    */
 
     //clean up dynamically allocated memory
     for(unsigned int i = 0; i < step.size(); i++)
@@ -918,6 +830,6 @@ int main(int argc, char** argv)
     delete[] tmp_Sk;
     delete[] tmp_Sn;
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
