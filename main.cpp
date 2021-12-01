@@ -194,6 +194,9 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
     std::vector<std::string> t;
 
     double* init_box;
+    
+    //important: increment start step to skip initial configuration
+    start += 1;
 
     std::stringstream ss;
     int inttemp = 0;
@@ -233,7 +236,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
             else if(t[0].compare("timestep") == 0)
             {
                 s++;
-                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     if( ((s-start)/interval)%update_inter == 0)
                     {
@@ -259,7 +262,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 {
                     init_box = box_l;
                 }
-                else if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     boxes->push_back(box_l);
                 }
@@ -282,7 +285,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss << t[3];
                 ss >> coord[2];
 
-                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     step->back().push_back(coord);
                 }
@@ -305,6 +308,9 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
     std::cout << "Loading trajectory velocities from " << v_filename << std::endl;
     infile.open(v_filename);
     
+    //decrement start back to correct value, no initial config to skip
+    start -= 1;
+    
     s = -1;
     while( !infile.eof() && (s <= stop || stop == -1) )
     {
@@ -317,7 +323,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
             if(t[0].compare("timestep") == 0)
             {
                 s++;
-                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     if( ((s-start)/interval)%update_inter == 0)
                     {
@@ -327,7 +333,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                     ss = std::stringstream();
                 }
             }
-            else if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+            else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
             {
                 double* vel = new double[3];
 
@@ -524,6 +530,13 @@ int main(int argc, char** argv)
         std::cout << std::endl;
         return EXIT_FAILURE;
     }
+    
+    if(step.size() != v_step.size())
+    {
+        std::cout << "Error: Coordinate and velocity step numbers do not match";
+        std::cout << std::endl;
+        return EXIT_FAILURE;
+    }
 
     double mean_x = 0.0;
     double mean_y = 0.0;
@@ -605,8 +618,7 @@ int main(int argc, char** argv)
         //update the progress bar
         if(s == checkpoints.front())
         {
-            std::cout << "*";
-            std::cout.flush();
+            std::cout << "*" << std::flush;
             checkpoints.pop();
         }
         double A = boxes[s][0]*boxes[s][1];
