@@ -176,10 +176,12 @@ void split_str(std::string input, std::string delim, std::vector<std::string>* r
     }
 }
 
-void load_data(std::string filename, std::vector<std::vector<double*> >* step, std::vector<int>* type,
-               std::vector<std::vector<int> >* bonds, std::vector<double*>* boxes, int start=0, int stop=-1, int interval=1)
+void load_data(std::string filename, std::string v_filename, std::vector<std::vector<double*> >* step,
+               std::vector<std::vector<double*> >* v_step, std::vector<int>* type,
+               std::vector<std::vector<int> >* bonds, std::vector<double*>* boxes,
+               int start=0, int stop=-1, int interval=1)
 {
-    std::cout << "Loading trajectory from " << filename << std::endl;
+    std::cout << "Loading trajectory positions from " << filename << std::endl;
 
     int update_inter = 100;
     if(stop != -1)
@@ -293,10 +295,57 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
     }
     infile.close();
 
+    //constant box size
     if(boxes->size() == 0)
     {
         boxes->push_back(init_box);
     }
+    
+    update_inter = std::ceil(float(step->size())/10.0);
+    std::cout << "Loading trajectory velocities from " << v_filename << std::endl;
+    infile.open(v_filename);
+    
+    s = -1;
+    while( !infile.eof() && (s <= stop || stop == -1) )
+    {
+        std::getline(infile, line);
+        t.clear();
+        split_str(line, " ", &t);
+
+        if(t.size() > 1)
+        {
+            if(t[0].compare("timestep") == 0)
+            {
+                s++;
+                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                {
+                    if( ((s-start)/interval)%update_inter == 0)
+                    {
+                        std::cout << "Loaded " << (s-start)/interval << " vel steps..." << std::endl;
+                    }
+                    v_step->push_back(std::vector<double*>() );
+                    ss = std::stringstream();
+                }
+            }
+            else if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+            {
+                double* vel = new double[3];
+
+                ss.clear();
+                ss << t[1];
+                ss >> vel[0];
+                ss.clear();
+                ss << t[2];
+                ss >> vel[1];
+                ss.clear();
+                ss << t[3];
+                ss >> vel[2];
+                
+                v_step->back().push_back(vel);
+            }
+        }
+    }
+    infile.close();
 
     std::cout << "Finished Loading File.\n" << std::endl;
 }
@@ -351,6 +400,7 @@ int main(int argc, char** argv)
     //initialize command line args with default values
     std::stringstream ss;
     std::string ifname("centered_trajectory.vtf");
+    std::string vifname("v_centered_trajectory.vtf");
     std::string ofname("stress_profile.dat");
     std::string tfname("timestep_data.dat");
     int start = 0;
@@ -413,9 +463,16 @@ int main(int argc, char** argv)
             ss >> kT;
             ss.clear();
         }
+        else if(std::string(argv[i]).compare("-v") == 0)
+        {
+            ss << argv[i+1];
+            ss >> vifname;
+            ss.clear();
+        }
     }
 
     std::vector<std::vector<double*> > step;
+    std::vector<std::vector<double*> > v_step;
     std::vector<int> type;
     std::vector<std::vector<int> > bonds;
     std::vector<double*> boxes;
@@ -423,11 +480,12 @@ int main(int argc, char** argv)
     std::cout << std::endl;
 
     bool NVT = false; //default assumption, to be checked later
-    load_data(ifname, &step, &type, &bonds, &boxes, start, stop, interval);
+    load_data(ifname, vifname, &step, &v_step, &type, &bonds, &boxes, start, stop, interval);
 
     std::cout << "Loaded:" << std::endl;
     std::cout << "       " << type.size() << " particles" << std::endl;
-    std::cout << "       " << step.size() << " timesteps" << std::endl;
+    std::cout << "       " << step.size() << " coordinate timesteps" << std::endl;
+    std::cout << "       " << v_step.size() << " velocity timesteps" << std::endl;
     std::cout << "       " << boxes.size() << " box geometries" << std::endl;
     std::cout << std::endl << std::endl;
 
@@ -556,16 +614,23 @@ int main(int argc, char** argv)
         {
             ri = step[s][i];
             zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
-            temp = kT/(A*space);
-            for(int k = 0; k < 3; k++) //only diagonal components of kinetic tensor (ideal gas pressure)
+            
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
             {
-                //make sure the particle is within the domain we're treating
-                if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
+                for(int b = 0; b <= a; b++)
                 {
-                    Sk[zbin_ind_i].set(k,k,Sk[zbin_ind_i].get(k,k)-temp);
+                    //make sure the particle is within the domain we're treating
+                    if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
+                    {
+                        //kinetic contribution to stress tensor (NOT ideal gas)
+                        temp = v_step[s][i][a]*v_step[s][i][b]/(A*space);
+                        Sk[zbin_ind_i].set(a,b,Sk[zbin_ind_i].get(a,b)-temp);
+                    }
                 }
             }
-            for(int j = 0; j < i; j++) //loop over pairs i,j (without double-counting, hence j < i)
+            //loop over pairs i,j (without double-counting, hence j < i)
+            for(int j = 0; j < i; j++)
             {
                 rj = step[s][j];
                 mind_3d(ri, rj, boxes[s], rij); //rij stores return value
@@ -798,6 +863,13 @@ int main(int argc, char** argv)
         for(unsigned int j = 0; j < step[i].size(); j++)
         {
             delete[] step[i][j];
+        }
+    }
+    for(unsigned int i = 0; i < v_step.size(); i++)
+    {
+        for(unsigned int j = 0; j < v_step[i].size(); j++)
+        {
+            delete[] v_step[i][j];
         }
     }
     for(int i = 0; i < n_zvals; i++)
