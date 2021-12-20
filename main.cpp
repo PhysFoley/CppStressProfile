@@ -155,6 +155,11 @@ void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
     }
 }
 
+double theta(double x)
+{
+    return (x >= 0.0) ? 1.0 : 0.0;
+}
+
 //=========================================================
 // Trajectory Data Load Functions
 //=========================================================
@@ -591,7 +596,7 @@ int main(int argc, char** argv)
                         {
                             for(int b = 0; b <= a; b++)
                             {
-                                temp = rij[a]*rij[b]*phi_p/(A*space*r);
+                                temp = rij[a]*rij[b]*phi_p*theta((fold(ri[2],Lz)-zvals[zbin_ind_i])/rij[2])*theta((zvals[zbin_ind_j]-fold(rj[2],Lz))/rij[2])/(A*space*r);
                                 Sn[zbin_ind_i].set(a,b,Sn[zbin_ind_i].get(a,b)+temp);
                             }
                         }
@@ -627,7 +632,7 @@ int main(int argc, char** argv)
                             {
                                 for(int b = 0; b <= a; b++)
                                 {
-                                    temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
+                                    temp = rij[a]*rij[b]*phi_p*theta((fold(ri[2],Lz)-zvals[m])/rij[2])*theta((zvals[m]-fold(rj[2],Lz))/rij[2])/(A*std::abs(rij[2])*r);
                                     if(m == lo_ind) { temp = temp * lo_factor; }
                                     if(m == hi_ind) { temp = temp * hi_factor; }
                                     Sn[m].set(a,b,Sn[m].get(a,b)+temp);
@@ -666,7 +671,7 @@ int main(int argc, char** argv)
                         {
                             for(int b = 0; b <= a; b++)
                             {
-                                temp = rib[a]*rib[b]*phi_p/(A*space*r);
+                                temp = rib[a]*rib[b]*phi_p*theta((fold(ri[2],Lz)-zvals[zbin_ind_i])/rib[2])*theta((zvals[zbin_ind_b]-fold(rb[2],Lz))/rib[2])/(A*space*r);
                                 Sb[zbin_ind_i].set(a,b,Sb[zbin_ind_i].get(a,b)+temp);
                             }
                         }
@@ -702,7 +707,7 @@ int main(int argc, char** argv)
                             {
                                 for(int b = 0; b <= a; b++)
                                 {
-                                    temp = 0.5*rib[a]*rib[b]*phi_p/(A*std::abs(rib[2])*r);
+                                    temp = 0.5*rib[a]*rib[b]*phi_p*theta((fold(ri[2],Lz)-zvals[m])/rib[2])*theta((zvals[m]-fold(rb[2],Lz))/rib[2])/(A*std::abs(rib[2])*r);
                                     if(m == lo_ind) { temp = temp * lo_factor; }
                                     if(m == hi_ind) { temp = temp * hi_factor; }
                                     Sb[m].set(a,b,Sb[m].get(a,b)+temp);
