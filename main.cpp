@@ -25,7 +25,7 @@
 #include <algorithm>
 #include "mat3.hpp"
 
-const double pi = 3.1415926535897;
+const double pi = 3.141592653589793;
 
 //=========================================================
 // IMPORTANT: Change these constants as appriopriate
