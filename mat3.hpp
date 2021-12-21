@@ -1,3 +1,6 @@
+#ifndef _MAT3_HPP
+#define _MAT3_HPP
+
 class Mat3
 {
 private:
@@ -12,3 +15,5 @@ public:
     double get(int row, int col) const;
     void set(int row, int col, double val);
 };
+
+#endif
