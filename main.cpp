@@ -127,6 +127,28 @@ double f23(double r)
 }
 
 //=========================================================
+// Define Interaction Matrix
+//=========================================================
+
+double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double) =
+{
+/*         0     1     2     3     4     5     6    */
+/* 0 */  {f00,  f01,  f01,  f01,  f01,  f00,  f00},
+/* 1 */  {f01,  f11,  f11,  f11,  f11,  f01,  f01},
+/* 2 */  {f01,  f11,  f11,  f23,  f11,  f01,  f01},
+/* 3 */  {f01,  f11,  f23,  f11,  f11,  f01,  f01},
+/* 4 */  {f01,  f11,  f11,  f11,  f11,  f01,  f01},
+/* 5 */  {f00,  f01,  f01,  f01,  f01,  f00,  f00},
+/* 6 */  {f00,  f01,  f01,  f01,  f01,  f00,  f00}
+};
+
+//==============================================================================
+//
+// USER MODIFICATIONS SHOULD NOT BE NECESSARY BEYOND THIS POINT
+//
+//==============================================================================
+
+//=========================================================
 // Algorithm Utility Functions
 //=========================================================
 
@@ -298,11 +320,10 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
 int main(int argc, char** argv)
 {
     //=========================================================
-    // Define Interaction Matrix
+    // Optional second way of defining interaction matrix
     //=========================================================
-
-    double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double);
-
+    
+    /*
     forces[0][0] = f00;
     forces[1][1] = f11;
     forces[2][2] = f11;
@@ -337,11 +358,21 @@ int main(int argc, char** argv)
     forces[4][6] = forces[6][4] = f01;
 
     forces[5][6] = forces[6][5] = f00;
-
-    //=========================================================
-    // User modifications should not be necessary
-    // beyond this point
-    //=========================================================
+    */
+    
+    //make sure interaction matrix is symmetric
+    for(int i=0; i<NUM_BEAD_TYPES; i++)
+    {
+        for(int j=0; j<i; j++)
+        {
+            if(forces[i][j] != forces[j][i])
+            {
+                std::cout << "Error: Interaction matrix must be symmetric!";
+                std::cout << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+    }
 
     //initialize command line args with default values
     std::stringstream ss;
@@ -409,6 +440,11 @@ int main(int argc, char** argv)
             ss.clear();
         }
     }
+    
+    // beyond this point, don't just return exit_failure, because there
+    // is a bunch of dynamic memory that needs to be freed. Set the
+    // fail flag to true instead, so we carry through to memory cleanup.
+    bool fail = false;
 
     std::vector<std::vector<double*> > step;
     std::vector<int> type;
@@ -417,7 +453,7 @@ int main(int argc, char** argv)
 
     std::cout << std::endl;
 
-    bool NVT = false; //default assumption, to be checked later
+    bool NVT = false; // default assumption, to be checked later
     load_data(ifname, &step, &type, &bonds, &boxes, start, stop, interval);
 
     std::cout << "Loaded:" << std::endl;
@@ -430,11 +466,10 @@ int main(int argc, char** argv)
     {
         std::cout << "Error reading trajectory, failed to load "
                   << "particles/timesteps/boxes" << std::endl;
-
-        return EXIT_FAILURE;
+        fail = true;
     }
 
-    if(boxes.size() != step.size())
+    if(!fail && (boxes.size() != step.size()))
     {
         if(boxes.size() == 1)
         {
@@ -452,13 +487,30 @@ int main(int argc, char** argv)
         {
             std::cout << "Error: number of boxes and timesteps do not match";
             std::cout << std::endl;
-            return EXIT_FAILURE;
+            fail = true;
         }
     }
-    else if(boxes[0][2] != boxes[1][2])
+    else if(!fail && (boxes[0][2] != boxes[1][2]))
     {
         std::cout << "Error: Box should not fluctuate in z-direction";
         std::cout << std::endl;
+        fail = true;
+    }
+    
+    //check for failure and get out now before we allocate a lot more memory
+    if(fail)
+    {
+        for(unsigned int i = 0; i < step.size(); i++)
+        {
+            for(unsigned int j = 0; j < step[i].size(); j++)
+            {
+                delete[] step[i][j];
+            }
+        }
+        for(unsigned int i = 0; i < boxes.size(); i++)
+        {
+            delete[] boxes[i];
+        }
         return EXIT_FAILURE;
     }
 
@@ -530,7 +582,7 @@ int main(int argc, char** argv)
         checkpoints.push(i*step.size()/n_chkpts);
     }
 
-    for(int s = 0; s < step.size(); s++)
+    for(int s = 0; !fail && (s < step.size()); s++)
     {
         //store value of stress tensor before new calculations
         for(int m = 0; m < n_zvals; m++)
@@ -547,7 +599,7 @@ int main(int argc, char** argv)
             checkpoints.pop();
         }
         double A = boxes[s][0]*boxes[s][1];
-        for(int i = 0; i < type.size(); i++) //loop over all particles i
+        for(int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
         {
             ri = step[s][i];
             zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
@@ -560,7 +612,7 @@ int main(int argc, char** argv)
                     Sk[zbin_ind_i].set(k,k,Sk[zbin_ind_i].get(k,k)-temp);
                 }
             }
-            for(int j = 0; j < i; j++) //loop over pairs i,j (without double-counting, hence j < i)
+            for(int j = 0; !fail && (j < i); j++) //loop over pairs i,j (without double-counting, hence j < i)
             {
                 rj = step[s][j];
                 mind_3d(ri, rj, boxes[s], rij); //rij stores return value
@@ -571,8 +623,8 @@ int main(int argc, char** argv)
                 }
                 else if(r < DBL_EPSILON)
                 {
-                    std::cout << "Divide by zero in non-bonded interactions!" << std::endl;
-                    return EXIT_FAILURE;
+                    std::cout << "\nDivide by zero in non-bonded interactions!" << std::endl;
+                    fail = true;
                 }
                 phi_p = forces[type[i]][type[j]](r);
                 zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
@@ -639,8 +691,8 @@ int main(int argc, char** argv)
                 r = std::sqrt(rib[0]*rib[0] + rib[1]*rib[1] +rib[2]*rib[2]);
                 if(r < DBL_EPSILON)
                 {
-                    std::cout << "Divide by zero in bonded interactions!" << std::endl;
-                    return EXIT_FAILURE;
+                    std::cout << "\nDivide by zero in bonded interactions!" << std::endl;
+                    fail = true;
                 }
                 if(std::abs(bonds[i][bo]-i) == 1)
                 {
@@ -727,66 +779,70 @@ int main(int argc, char** argv)
             }
         }
     }//end timestep loop
-    std::cout << "|" << std::endl << std::endl; //finish progress bar
-
-    std::ofstream outfile;
-
-    //indices of lower-triangular matrix elements
-    int indices[] = {0, 4, 8, 3, 6, 7};
-
-    outfile.open(ofname);
-    //average the stress tensor and write to file
-    for(int i = 0; i < n_zvals; i++)
+    
+    if(!fail)
     {
-        //Divide all components by number of timesteps to average
-        for(int a = 0; a < 3; a++)
+        std::cout << "|" << std::endl << std::endl; //finish progress bar
+
+        std::ofstream outfile;
+
+        //indices of lower-triangular matrix elements
+        int indices[] = {0, 4, 8, 3, 6, 7};
+
+        outfile.open(ofname);
+        //average the stress tensor and write to file
+        for(int i = 0; i < n_zvals; i++)
         {
-            for(int b = 0; b <= a; b++)
+            //Divide all components by number of timesteps to average
+            for(int a = 0; a < 3; a++)
             {
-                Sb[i].set(a,b,Sb[i].get(a,b)/float(step.size()));
-                Sn[i].set(a,b,Sn[i].get(a,b)/float(step.size()));
-                Sk[i].set(a,b,Sk[i].get(a,b)/float(step.size()));
+                for(int b = 0; b <= a; b++)
+                {
+                    Sb[i].set(a,b,Sb[i].get(a,b)/float(step.size()));
+                    Sn[i].set(a,b,Sn[i].get(a,b)/float(step.size()));
+                    Sk[i].set(a,b,Sk[i].get(a,b)/float(step.size()));
+                }
+            }
+            //output to file: xx, yy, zz, yx, zx, zy
+            outfile << "z= " << zvals[i] << std::endl;
+            for(int m = 0; m < 6; m++)
+            {
+                outfile << Sk[i].get(indices[m]/3,indices[m]%3) << " ";
+            }
+            outfile << std::endl;
+            for(int m = 0; m < 6; m++)
+            {
+                outfile << Sb[i].get(indices[m]/3,indices[m]%3) << " ";
+            }
+            outfile << std::endl;
+            for(int m = 0; m < 6; m++)
+            {
+                outfile << Sn[i].get(indices[m]/3,indices[m]%3) << " ";
+            }
+            outfile << std::endl;
+        }
+        outfile.close();
+        std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
+
+        std::cout << "Writing timestep data to file " << tfname << std::endl;
+        std::ofstream tsfile;
+        tsfile.open(tfname);
+        for(int i = 0; i < n_zvals; i++)
+        {
+            tsfile << "z= " << zvals[i] << std::endl;
+            // output for xx, yy, zz, yx, zx, zy
+            for(int j = 0; j < 6; j++)
+            {
+                for(int k = 0; k < step.size(); k++)
+                {
+                    tsfile << S_vals[i][indices[j]][k] << " ";
+                }
+                tsfile << std::endl;
             }
         }
-        //output to file: xx, yy, zz, yx, zx, zy
-        outfile << "z= " << zvals[i] << std::endl;
-        for(int m = 0; m < 6; m++)
-        {
-            outfile << Sk[i].get(indices[m]/3,indices[m]%3) << " ";
-        }
-        outfile << std::endl;
-        for(int m = 0; m < 6; m++)
-        {
-            outfile << Sb[i].get(indices[m]/3,indices[m]%3) << " ";
-        }
-        outfile << std::endl;
-        for(int m = 0; m < 6; m++)
-        {
-            outfile << Sn[i].get(indices[m]/3,indices[m]%3) << " ";
-        }
-        outfile << std::endl;
+        tsfile.close();
     }
-    outfile.close();
-    std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
-
-    std::cout << "Writing timestep data to file " << tfname << std::endl;
-    std::ofstream tsfile;
-    tsfile.open(tfname);
-    for(int i = 0; i < n_zvals; i++)
-    {
-        tsfile << "z= " << zvals[i] << std::endl;
-        // output for xx, yy, zz, yx, zx, zy
-        for(int j = 0; j < 6; j++)
-        {
-            for(int k = 0; k < step.size(); k++)
-            {
-                tsfile << S_vals[i][indices[j]][k] << " ";
-            }
-            tsfile << std::endl;
-        }
-    }
-    tsfile.close();
-
+    
     //clean up dynamically allocated memory
     for(unsigned int i = 0; i < step.size(); i++)
     {
@@ -824,7 +880,8 @@ int main(int argc, char** argv)
     delete[] tmp_Sb;
     delete[] tmp_Sk;
     delete[] tmp_Sn;
-
+    
+    if(fail){ return EXIT_FAILURE; }
+    
     return EXIT_SUCCESS;
 }
-
