@@ -117,13 +117,13 @@ double f11(double r)
 double f23(double r)
 {
     if(r <= std::pow(2.0,1.0/6.0) )
-        {
-                return 24.0*( 1.0/std::pow(r,7.0) - (2.0/std::pow(r,13.0)) );
-        }
-        else
-        {
-                return 0.0;
-        }
+    {
+        return 24.0*( 1.0/std::pow(r,7.0) - (2.0/std::pow(r,13.0)) );
+    }
+    else
+    {
+        return 0.0;
+    }
 }
 
 //=========================================================
@@ -143,9 +143,11 @@ double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double) =
 };
 
 //==============================================================================
+//==============================================================================
 //
-// USER MODIFICATIONS SHOULD NOT BE NECESSARY BEYOND THIS POINT
+//      USER MODIFICATIONS SHOULD NOT BE NECESSARY BEYOND THIS POINT
 //
+//==============================================================================
 //==============================================================================
 
 //=========================================================
@@ -557,10 +559,10 @@ int main(int argc, char** argv)
         }
     }
 
-    double r, phi_p;
+    double r, phi_p, lo_factor, hi_factor;
     double *ri, *rj, *rb, *rij, *rib, *lo_r, *hi_r;
     double temp; // for storing temporary values
-    int zbin_ind_i, zbin_ind_j, zbin_ind_b;
+    int zbin_ind_i, zbin_ind_j, zbin_ind_b, lo_ind, hi_ind;
 
     rij = new double[3];
     rib = new double[3];
@@ -621,7 +623,7 @@ int main(int argc, char** argv)
                 { //out of interaction range
                     continue;
                 }
-                else if(r < DBL_EPSILON)
+                else if(r < DBL_EPSILON) // r == 0
                 {
                     std::cout << "\nDivide by zero in non-bonded interactions!" << std::endl;
                     fail = true;
@@ -656,29 +658,29 @@ int main(int argc, char** argv)
                         lo_r = rj;
                         hi_r = ri;
                     }
-                    int lo_ind = std::min(zbin_ind_i,zbin_ind_j);
-                    int hi_ind = std::max(zbin_ind_i,zbin_ind_j);
+                    lo_ind = std::min(zbin_ind_i,zbin_ind_j);
+                    hi_ind = std::max(zbin_ind_i,zbin_ind_j);
+                    
+                    // if neither particle is within domain, move on
+                    if(lo_ind >= n_zvals) { continue; }
+                    if(hi_ind < 0) { continue; }
 
                     //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
-                    double lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
-                    double hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
+                    lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
+                    hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
 
                     //loop over z slabs between particles i and j
-                    for(int m = lo_ind; m <= hi_ind; m++)
+                    for(int m = std::max(lo_ind,0); m <= std::min(hi_ind,n_zvals-1); m++)
                     {
-                        //only calculate if we're within calculation domain
-                        if(m < n_zvals && m >= 0)
+                        //loop over tensor components
+                        for(int a = 0; a < 3; a++)
                         {
-                            //loop over tensor components
-                            for(int a = 0; a < 3; a++)
+                            for(int b = 0; b <= a; b++)
                             {
-                                for(int b = 0; b <= a; b++)
-                                {
-                                    temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
-                                    if(m == lo_ind) { temp = temp * lo_factor; }
-                                    if(m == hi_ind) { temp = temp * hi_factor; }
-                                    Sn[m].set(a,b,Sn[m].get(a,b)+temp);
-                                }
+                                temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
+                                if(m == lo_ind) { temp = temp * lo_factor; }
+                                if(m == hi_ind) { temp = temp * hi_factor; }
+                                Sn[m].set(a,b,Sn[m].get(a,b)+temp);
                             }
                         }
                     }
@@ -689,7 +691,7 @@ int main(int argc, char** argv)
                 rb = step[s][bonds[i][bo]];
                 mind_3d(ri, rb, boxes[s], rib);
                 r = std::sqrt(rib[0]*rib[0] + rib[1]*rib[1] +rib[2]*rib[2]);
-                if(r < DBL_EPSILON)
+                if(r < DBL_EPSILON) // r == 0
                 {
                     std::cout << "\nDivide by zero in bonded interactions!" << std::endl;
                     fail = true;
@@ -731,29 +733,29 @@ int main(int argc, char** argv)
                         lo_r = rb;
                         hi_r = ri;
                     }
-                    int lo_ind = std::min(zbin_ind_i,zbin_ind_b);
-                    int hi_ind = std::max(zbin_ind_i,zbin_ind_b);
+                    lo_ind = std::min(zbin_ind_i,zbin_ind_b);
+                    hi_ind = std::max(zbin_ind_i,zbin_ind_b);
+                    
+                    // if neither particle is within domain, move on
+                    if(lo_ind >= n_zvals) { continue; }
+                    if(hi_ind < 0) { continue; }
 
                     //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
-                    double lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
-                    double hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
+                    lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
+                    hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
 
                     //loop over z slabs between particles i and j
-                    for(int m = lo_ind; m <= hi_ind; m++)
+                    for(int m = std::max(lo_ind,0); m <= std::min(hi_ind,n_zvals-1); m++)
                     {
-                        //only calculate if we're within calculation domain
-                        if(m < n_zvals && m >= 0)
+                        //loop over tensor components
+                        for(int a = 0; a < 3; a++)
                         {
-                            //loop over tensor components
-                            for(int a = 0; a < 3; a++)
+                            for(int b = 0; b <= a; b++)
                             {
-                                for(int b = 0; b <= a; b++)
-                                {
-                                    temp = 0.5*rib[a]*rib[b]*phi_p/(A*std::abs(rib[2])*r);
-                                    if(m == lo_ind) { temp = temp * lo_factor; }
-                                    if(m == hi_ind) { temp = temp * hi_factor; }
-                                    Sb[m].set(a,b,Sb[m].get(a,b)+temp);
-                                }
+                                temp = 0.5*rib[a]*rib[b]*phi_p/(A*std::abs(rib[2])*r);
+                                if(m == lo_ind) { temp = temp * lo_factor; }
+                                if(m == hi_ind) { temp = temp * hi_factor; }
+                                Sb[m].set(a,b,Sb[m].get(a,b)+temp);
                             }
                         }
                     }
