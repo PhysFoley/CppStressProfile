@@ -16,8 +16,9 @@
 
 #include <iostream>
 #include <cstdlib>
-#include <fstream>
 #include <cmath>
+#include <cfloat>
+#include <fstream>
 #include <vector>
 #include <queue>
 #include <string>
@@ -231,7 +232,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
             else if(t[0].compare("timestep") == 0)
             {
                 s++;
-                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
                 {
                     if( ((s-start)/interval)%update_inter == 0)
                     {
@@ -257,7 +258,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 {
                     init_box = box_l;
                 }
-                else if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1))
                 {
                     boxes->push_back(box_l);
                 }
@@ -266,7 +267,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                     delete[] box_l;
                 }
             }
-            else if(s >= start)
+            else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1))
             {
                 double* coord = new double[3];
 
@@ -279,15 +280,8 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss.clear();
                 ss << t[3];
                 ss >> coord[2];
-
-                if(s%interval == 0 && s >= start && (s <= stop || stop == -1) )
-                {
-                    step->back().push_back(coord);
-                }
-                else
-                {
-                    delete[] coord;
-                }
+                
+                step->back().push_back(coord);
             }
         }
     }
@@ -338,6 +332,7 @@ int main(int argc, char** argv)
     forces[3][4] = forces[4][3] = f11;
     forces[3][5] = forces[5][3] = f01;
     forces[3][6] = forces[6][3] = f01;
+    
     forces[4][5] = forces[5][4] = f01;
     forces[4][6] = forces[6][4] = f01;
 
@@ -574,7 +569,7 @@ int main(int argc, char** argv)
                 { //out of interaction range
                     continue;
                 }
-                else if(r == 0.0)
+                else if(r < DBL_EPSILON)
                 {
                     std::cout << "Divide by zero in non-bonded interactions!" << std::endl;
                     return EXIT_FAILURE;
@@ -642,7 +637,7 @@ int main(int argc, char** argv)
                 rb = step[s][bonds[i][bo]];
                 mind_3d(ri, rb, boxes[s], rib);
                 r = std::sqrt(rib[0]*rib[0] + rib[1]*rib[1] +rib[2]*rib[2]);
-                if(r == 0.0)
+                if(r < DBL_EPSILON)
                 {
                     std::cout << "Divide by zero in bonded interactions!" << std::endl;
                     return EXIT_FAILURE;
