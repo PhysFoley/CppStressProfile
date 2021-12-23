@@ -251,7 +251,7 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
                 ss << svtemp[1];
                 ss >> inttemp2;
                 bonds->at(inttemp).push_back(inttemp2);
-                bonds->at(inttemp2).push_back(inttemp);
+                //bonds->at(inttemp2).push_back(inttemp);
             }
             else if(t[0].compare("timestep") == 0)
             {
@@ -318,6 +318,79 @@ void load_data(std::string filename, std::vector<std::vector<double*> >* step, s
 
     std::cout << "Finished Loading File.\n" << std::endl;
 }
+
+//=========================================================
+// Distributing stress over z bins
+//=========================================================
+
+void distribute_stress(double r, double *ri, double *rj, double *rij,
+                       float phi_p, int zbin_i, int zbin_j, double *zvals,
+                       int n_zvals, double space, double Lz, double A, Mat3* S)
+{
+    double temp, lo_factor, hi_factor;
+    double *lo_r, *hi_r;
+    int lo_ind, hi_ind;
+    
+    if(zbin_i == zbin_j)
+    {
+        //make sure the particle is within the domain we're treating
+        if(zbin_i < n_zvals && zbin_i >= 0)
+        {
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
+            {
+                for(int b = 0; b <= a; b++)
+                {
+                    temp = rij[a]*rij[b]*phi_p/(A*space*r);
+                    S[zbin_i].set(a,b,S[zbin_i].get(a,b)+temp);
+                }
+            }
+        }
+    }
+    else
+    {
+        if(zbin_i < zbin_j)
+        {
+            lo_r = ri;
+            hi_r = rj;
+        }
+        else
+        {
+            lo_r = rj;
+            hi_r = ri;
+        }
+        lo_ind = std::min(zbin_i,zbin_j);
+        hi_ind = std::max(zbin_i,zbin_j);
+        
+        // if neither particle is within domain, move on
+        if(lo_ind >= n_zvals) { return; }
+        if(hi_ind < 0) { return; }
+
+        //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
+        lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
+        hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
+
+        //loop over z slabs between particles i and j
+        for(int m = std::max(lo_ind,0); m <= std::min(hi_ind,n_zvals-1); m++)
+        {
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
+            {
+                for(int b = 0; b <= a; b++)
+                {
+                    temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
+                    if(m == lo_ind) { temp = temp * lo_factor; }
+                    if(m == hi_ind) { temp = temp * hi_factor; }
+                    S[m].set(a,b,S[m].get(a,b)+temp);
+                }
+            }
+        }
+    }
+}
+
+//=========================================================
+// Program Entrance
+//=========================================================
 
 int main(int argc, char** argv)
 {
@@ -559,10 +632,10 @@ int main(int argc, char** argv)
         }
     }
 
-    double r, phi_p, lo_factor, hi_factor;
-    double *ri, *rj, *rb, *rij, *rib, *lo_r, *hi_r;
+    double r, phi_p;
+    double *ri, *rj, *rb, *rij, *rib;
     double temp; // for storing temporary values
-    int zbin_ind_i, zbin_ind_j, zbin_ind_b, lo_ind, hi_ind;
+    int zbin_ind_i, zbin_ind_j, zbin_ind_b;
 
     rij = new double[3];
     rib = new double[3];
@@ -630,61 +703,9 @@ int main(int argc, char** argv)
                 }
                 phi_p = forces[type[i]][type[j]](r);
                 zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
-                if(zbin_ind_i == zbin_ind_j)
-                {
-                    //make sure the particle is within the domain we're treating
-                    if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
-                    {
-                        //loop over tensor components
-                        for(int a = 0; a < 3; a++)
-                        {
-                            for(int b = 0; b <= a; b++)
-                            {
-                                temp = rij[a]*rij[b]*phi_p/(A*space*r);
-                                Sn[zbin_ind_i].set(a,b,Sn[zbin_ind_i].get(a,b)+temp);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if(zbin_ind_i < zbin_ind_j)
-                    {
-                        lo_r = ri;
-                        hi_r = rj;
-                    }
-                    else
-                    {
-                        lo_r = rj;
-                        hi_r = ri;
-                    }
-                    lo_ind = std::min(zbin_ind_i,zbin_ind_j);
-                    hi_ind = std::max(zbin_ind_i,zbin_ind_j);
-                    
-                    // if neither particle is within domain, move on
-                    if(lo_ind >= n_zvals) { continue; }
-                    if(hi_ind < 0) { continue; }
-
-                    //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
-                    lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
-                    hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
-
-                    //loop over z slabs between particles i and j
-                    for(int m = std::max(lo_ind,0); m <= std::min(hi_ind,n_zvals-1); m++)
-                    {
-                        //loop over tensor components
-                        for(int a = 0; a < 3; a++)
-                        {
-                            for(int b = 0; b <= a; b++)
-                            {
-                                temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
-                                if(m == lo_ind) { temp = temp * lo_factor; }
-                                if(m == hi_ind) { temp = temp * hi_factor; }
-                                Sn[m].set(a,b,Sn[m].get(a,b)+temp);
-                            }
-                        }
-                    }
-                }
+                
+                distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
+                                  zvals, n_zvals, space, Lz, A, Sn);
             } //end non-bonded interactions
             for(int bo = 0; bo < bonds[i].size(); bo++) //begin bonded interactions
             {
@@ -705,61 +726,9 @@ int main(int argc, char** argv)
                     phi_p = bend(r, 10.0);
                 }
                 zbin_ind_b = int((fold(rb[2],Lz)-zvals[0]+(space/2.0))/space);
-                if(zbin_ind_i == zbin_ind_b)
-                {
-                    //make sure the particle is within the domain we're treating
-                    if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
-                    {
-                        //loop over tensor components
-                        for(int a = 0; a < 3; a++)
-                        {
-                            for(int b = 0; b <= a; b++)
-                            {
-                                temp = rib[a]*rib[b]*phi_p/(A*space*r);
-                                Sb[zbin_ind_i].set(a,b,Sb[zbin_ind_i].get(a,b)+temp);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if(zbin_ind_i < zbin_ind_b)
-                    {
-                        lo_r = ri;
-                        hi_r = rb;
-                    }
-                    else
-                    {
-                        lo_r = rb;
-                        hi_r = ri;
-                    }
-                    lo_ind = std::min(zbin_ind_i,zbin_ind_b);
-                    hi_ind = std::max(zbin_ind_i,zbin_ind_b);
-                    
-                    // if neither particle is within domain, move on
-                    if(lo_ind >= n_zvals) { continue; }
-                    if(hi_ind < 0) { continue; }
-
-                    //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
-                    lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
-                    hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
-
-                    //loop over z slabs between particles i and j
-                    for(int m = std::max(lo_ind,0); m <= std::min(hi_ind,n_zvals-1); m++)
-                    {
-                        //loop over tensor components
-                        for(int a = 0; a < 3; a++)
-                        {
-                            for(int b = 0; b <= a; b++)
-                            {
-                                temp = 0.5*rib[a]*rib[b]*phi_p/(A*std::abs(rib[2])*r);
-                                if(m == lo_ind) { temp = temp * lo_factor; }
-                                if(m == hi_ind) { temp = temp * hi_factor; }
-                                Sb[m].set(a,b,Sb[m].get(a,b)+temp);
-                            }
-                        }
-                    }
-                }
+                
+                distribute_stress(r, ri, rb, rib, phi_p, zbin_ind_i, zbin_ind_b,
+                                  zvals, n_zvals, space, Lz, A, Sb);
             }//end bonded interactions
         }//end particle loop
 
