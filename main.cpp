@@ -16,8 +16,9 @@
 
 #include <iostream>
 #include <cstdlib>
-#include <fstream>
 #include <cmath>
+#include <cfloat>
+#include <fstream>
 #include <vector>
 #include <queue>
 #include <string>
@@ -25,105 +26,57 @@
 #include <algorithm>
 #include "mat3.hpp"
 
-const double pi = 3.1415926535897;
+const double pi = 3.141592653589793;
 
 //=========================================================
 // IMPORTANT: Change these constants as appriopriate
 //=========================================================
 
 //make sure this matches the number of distinct bead types!
-const int NUM_BEAD_TYPES = 7;
+const int NUM_BEAD_TYPES = 1;
 
 //make sure this is larger than longest-range non-bonded interaction!
-const double NB_CUTOFF = 3.0;
+const double NB_CUTOFF = 3.5;
 
 //=========================================================
 // Derivatives of Interaction Potentials
 //=========================================================
 
+
 double lj(double r, double b, double rc, double eps)
 {
     if(r <= rc)
     {
-        return 24.0*eps*( (std::pow(b,6.0)/std::pow(r,7.0)) - (2.0*std::pow(b,12.0)/std::pow(r,13.0)) );
+        return 24.0*eps*( (std::pow(b,6.0)/std::pow(r,7.0)) - (2.0*std::pow(b,12.0)/std::pow(r,13.0)));
     }
     else
     {
         return 0.0;
     }
-}
-
-double cos2(double r, double rc, double wc, double eps)
-{
-    if(r <= rc)
-    {
-        return 0.0;
-    }
-    else if(r > rc + wc)
-    {
-        return 0.0;
-    }
-    else
-    {
-        return (pi*eps/(2.0*wc))*std::sin(pi*(r-rc)/wc);
-    }
-}
-
-double fene(double r, double k, double rinf)
-{
-    return k*r/(1.0 - std::pow(r/rinf,2.0) );
-}
-
-double bend(double r, double k)
-{
-    return k*(r-4.0);
-}
-
-double ljcos2(double r, double b, double eps, double rc, double wc)
-{
-    return lj(r, b, rc, eps) + cos2(r, rc, wc, eps);
 }
 
 double f00(double r)
 {
-    if(r <= 0.95*std::pow(2.0,1.0/6.0) )
-    {
-        return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
-    }
-    else
-    {
-        return 0.0;
-    }
+    return lj(r,1.0,3.5,1.0);
 }
 
-double f01(double r)
-{
-    if(r <= 0.95*std::pow(2.0,1.0/6.0) )
-    {
-        return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
-    }
-    else
-    {
-        return 0.0;
-    }
-}
+//=========================================================
+// Define Interaction Matrix
+//=========================================================
 
-double f11(double r)
+double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double) =
 {
-    return lj(r, 1.0, std::pow(2.0,1.0/6.0), 1.0) + cos2(r, std::pow(2.0,1.0/6.0), 1.6, 1.0);
-}
+/*         0    */
+/* 0 */  {f00}
+};
 
-double f23(double r)
-{
-    if(r <= std::pow(2.0,1.0/6.0) )
-        {
-                return 24.0*( 1.0/std::pow(r,7.0) - (2.0/std::pow(r,13.0)) );
-        }
-        else
-        {
-                return 0.0;
-        }
-}
+//==============================================================================
+//==============================================================================
+//
+//      USER MODIFICATIONS SHOULD NOT BE NECESSARY BEYOND THIS POINT
+//
+//==============================================================================
+//==============================================================================
 
 //=========================================================
 // Algorithm Utility Functions
@@ -194,9 +147,6 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
     std::vector<std::string> t;
 
     double* init_box;
-    
-    //important: increment start step to skip initial configuration
-    start += 1;
 
     std::stringstream ss;
     int inttemp = 0;
@@ -231,7 +181,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss << svtemp[1];
                 ss >> inttemp2;
                 bonds->at(inttemp).push_back(inttemp2);
-                bonds->at(inttemp2).push_back(inttemp);
+                //bonds->at(inttemp2).push_back(inttemp);
             }
             else if(t[0].compare("timestep") == 0)
             {
@@ -262,7 +212,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 {
                     init_box = box_l;
                 }
-                else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
+                else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1))
                 {
                     boxes->push_back(box_l);
                 }
@@ -271,7 +221,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                     delete[] box_l;
                 }
             }
-            else if(s >= start)
+            else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1))
             {
                 double* coord = new double[3];
 
@@ -284,21 +234,13 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss.clear();
                 ss << t[3];
                 ss >> coord[2];
-
-                if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1) )
-                {
-                    step->back().push_back(coord);
-                }
-                else
-                {
-                    delete[] coord;
-                }
+                
+                step->back().push_back(coord);
             }
         }
     }
     infile.close();
-
-    //constant box size
+    
     if(boxes->size() == 0)
     {
         boxes->push_back(init_box);
@@ -352,18 +294,90 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
         }
     }
     infile.close();
-
+    
     std::cout << "Finished Loading File.\n" << std::endl;
 }
+
+//=========================================================
+// Distributing stress over z bins
+//=========================================================
+
+void distribute_stress(double r, double *ri, double *rj, double *rij,
+                       float phi_p, int zbin_i, int zbin_j, double *zvals,
+                       int n_zvals, double space, double Lz, double A, Mat3* S)
+{
+    double temp, lo_factor, hi_factor;
+    double *lo_r, *hi_r;
+    int lo_ind, hi_ind;
+    
+    if(zbin_i == zbin_j)
+    {
+        //make sure the particle is within the domain we're treating
+        if(zbin_i < n_zvals && zbin_i >= 0)
+        {
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
+            {
+                for(int b = 0; b <= a; b++)
+                {
+                    temp = rij[a]*rij[b]*phi_p/(A*space*r);
+                    S[zbin_i].set(a,b,S[zbin_i].get(a,b)+temp);
+                }
+            }
+        }
+    }
+    else
+    {
+        if(zbin_i < zbin_j)
+        {
+            lo_r = ri;
+            hi_r = rj;
+        }
+        else
+        {
+            lo_r = rj;
+            hi_r = ri;
+        }
+        lo_ind = std::min(zbin_i,zbin_j);
+        hi_ind = std::max(zbin_i,zbin_j);
+        
+        // if neither particle is within domain, move on
+        if(lo_ind >= n_zvals) { return; }
+        if(hi_ind < 0) { return; }
+
+        //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
+        lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
+        hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
+
+        //loop over z slabs between particles i and j
+        for(int m = std::max(lo_ind,0); m <= std::min(hi_ind,n_zvals-1); m++)
+        {
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
+            {
+                for(int b = 0; b <= a; b++)
+                {
+                    temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
+                    if(m == lo_ind) { temp = temp * lo_factor; }
+                    if(m == hi_ind) { temp = temp * hi_factor; }
+                    S[m].set(a,b,S[m].get(a,b)+temp);
+                }
+            }
+        }
+    }
+}
+
+//=========================================================
+// Program Entrance
+//=========================================================
 
 int main(int argc, char** argv)
 {
     //=========================================================
-    // Define Interaction Matrix
+    // Optional second way of defining interaction matrix
     //=========================================================
-
-    double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double);
-
+    
+    /*
     forces[0][0] = f00;
     forces[1][1] = f11;
     forces[2][2] = f11;
@@ -393,15 +407,26 @@ int main(int argc, char** argv)
     forces[3][4] = forces[4][3] = f11;
     forces[3][5] = forces[5][3] = f01;
     forces[3][6] = forces[6][3] = f01;
+    
     forces[4][5] = forces[5][4] = f01;
     forces[4][6] = forces[6][4] = f01;
 
     forces[5][6] = forces[6][5] = f00;
-
-    //=========================================================
-    // User modifications should not be necessary
-    // beyond this point
-    //=========================================================
+    */
+    
+    //make sure interaction matrix is symmetric
+    for(int i=0; i<NUM_BEAD_TYPES; i++)
+    {
+        for(int j=0; j<i; j++)
+        {
+            if(forces[i][j] != forces[j][i])
+            {
+                std::cout << "Error: Interaction matrix must be symmetric!";
+                std::cout << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+    }
 
     //initialize command line args with default values
     std::stringstream ss;
@@ -412,9 +437,9 @@ int main(int argc, char** argv)
     int start = 0;
     int stop = -1;
     int interval = 1;
-    int n_zvals = 51;
+    int n_zvals = 25;
     double thickness = 10.0;
-    double kT = 1.4;
+    double kT = 1.0;
 
     //parse command line args
     for(int i=1; i<argc-1; i+=2)
@@ -476,6 +501,11 @@ int main(int argc, char** argv)
             ss.clear();
         }
     }
+    
+    // beyond this point, don't just return exit_failure, because there
+    // is a bunch of dynamic memory that needs to be freed. Set the
+    // fail flag to true instead, so we carry through to memory cleanup.
+    bool fail = false;
 
     std::vector<std::vector<double*> > step;
     std::vector<std::vector<double*> > v_step;
@@ -485,7 +515,7 @@ int main(int argc, char** argv)
 
     std::cout << std::endl;
 
-    bool NVT = false; //default assumption, to be checked later
+    bool NVT = false; // default assumption, to be checked later
     load_data(ifname, vifname, &step, &v_step, &type, &bonds, &boxes, start, stop, interval);
 
     std::cout << "Loaded:" << std::endl;
@@ -499,11 +529,10 @@ int main(int argc, char** argv)
     {
         std::cout << "Error reading trajectory, failed to load "
                   << "particles/timesteps/boxes" << std::endl;
-
-        return EXIT_FAILURE;
+        fail = true;
     }
 
-    if(boxes.size() != step.size())
+    if(!fail && (boxes.size() != step.size()))
     {
         if(boxes.size() == 1)
         {
@@ -521,20 +550,30 @@ int main(int argc, char** argv)
         {
             std::cout << "Error: number of boxes and timesteps do not match";
             std::cout << std::endl;
-            return EXIT_FAILURE;
+            fail = true;
         }
     }
-    else if(boxes[0][2] != boxes[1][2])
+    else if(!fail && (boxes[0][2] != boxes[1][2]))
     {
         std::cout << "Error: Box should not fluctuate in z-direction";
         std::cout << std::endl;
-        return EXIT_FAILURE;
+        fail = true;
     }
     
-    if(step.size() != v_step.size())
+    //check for failure and get out now before we allocate a lot more memory
+    if(fail)
     {
-        std::cout << "Error: Coordinate and velocity step numbers do not match";
-        std::cout << std::endl;
+        for(unsigned int i = 0; i < step.size(); i++)
+        {
+            for(unsigned int j = 0; j < step[i].size(); j++)
+            {
+                delete[] step[i][j];
+            }
+        }
+        for(unsigned int i = 0; i < boxes.size(); i++)
+        {
+            delete[] boxes[i];
+        }
         return EXIT_FAILURE;
     }
 
@@ -558,8 +597,8 @@ int main(int argc, char** argv)
     }
     std::cout << std::endl << "Calculating stress at " << n_zvals;
     std::cout << " evenly spaced z values between ";
-    std::cout << (boxes[0][2]/2.0) - (thickness/2.0);
-    std::cout << " and " << (boxes[0][2]/2.0) + (thickness/2.0);
+    std::cout << zvals[0];
+    std::cout << " and " << zvals[n_zvals-1];
     std::cout << std::endl << std::endl;
 
     Mat3* Sk = new Mat3[n_zvals];
@@ -582,7 +621,7 @@ int main(int argc, char** argv)
     }
 
     double r, phi_p;
-    double *ri, *rj, *rb, *rij, *rib, *lo_r, *hi_r;
+    double *ri, *rj, *rb, *rij, *rib;
     double temp; // for storing temporary values
     int zbin_ind_i, zbin_ind_j, zbin_ind_b;
 
@@ -606,7 +645,7 @@ int main(int argc, char** argv)
         checkpoints.push(i*step.size()/n_chkpts);
     }
 
-    for(int s = 0; s < step.size(); s++)
+    for(int s = 0; !fail && (s < step.size()); s++)
     {
         //store value of stress tensor before new calculations
         for(int m = 0; m < n_zvals; m++)
@@ -618,15 +657,15 @@ int main(int argc, char** argv)
         //update the progress bar
         if(s == checkpoints.front())
         {
-            std::cout << "*" << std::flush;
+            std::cout << "*";
+            std::cout.flush();
             checkpoints.pop();
         }
         double A = boxes[s][0]*boxes[s][1];
-        for(int i = 0; i < type.size(); i++) //loop over all particles i
+        for(int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
         {
             ri = step[s][i];
-            zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
-            
+            zbin_ind_i = int(std::floor((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space));
             //loop over tensor components
             for(int a = 0; a < 3; a++)
             {
@@ -641,8 +680,7 @@ int main(int argc, char** argv)
                     }
                 }
             }
-            //loop over pairs i,j (without double-counting, hence j < i)
-            for(int j = 0; j < i; j++)
+            for(int j = 0; !fail && (j < i); j++) //loop over pairs i,j (without double-counting, hence j < i)
             {
                 rj = step[s][j];
                 mind_3d(ri, rj, boxes[s], rij); //rij stores return value
@@ -651,144 +689,17 @@ int main(int argc, char** argv)
                 { //out of interaction range
                     continue;
                 }
-                else if(r == 0.0)
+                else if(r < DBL_EPSILON) // r == 0
                 {
-                    std::cout << "Divide by zero in non-bonded interactions!" << std::endl;
-                    return EXIT_FAILURE;
+                    std::cout << "\nDivide by zero in non-bonded interactions!" << std::endl;
+                    fail = true;
                 }
                 phi_p = forces[type[i]][type[j]](r);
-                zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
-                if(zbin_ind_i == zbin_ind_j)
-                {
-                    //make sure the particle is within the domain we're treating
-                    if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
-                    {
-                        //loop over tensor components
-                        for(int a = 0; a < 3; a++)
-                        {
-                            for(int b = 0; b <= a; b++)
-                            {
-                                temp = rij[a]*rij[b]*phi_p/(A*space*r);
-                                Sn[zbin_ind_i].set(a,b,Sn[zbin_ind_i].get(a,b)+temp);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if(zbin_ind_i < zbin_ind_j)
-                    {
-                        lo_r = ri;
-                        hi_r = rj;
-                    }
-                    else
-                    {
-                        lo_r = rj;
-                        hi_r = ri;
-                    }
-                    int lo_ind = std::min(zbin_ind_i,zbin_ind_j);
-                    int hi_ind = std::max(zbin_ind_i,zbin_ind_j);
-
-                    //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
-                    double lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
-                    double hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
-
-                    //loop over z slabs between particles i and j
-                    for(int m = lo_ind; m <= hi_ind; m++)
-                    {
-                        //only calculate if we're within calculation domain
-                        if(m < n_zvals && m >= 0)
-                        {
-                            //loop over tensor components
-                            for(int a = 0; a < 3; a++)
-                            {
-                                for(int b = 0; b <= a; b++)
-                                {
-                                    temp = rij[a]*rij[b]*phi_p/(A*std::abs(rij[2])*r);
-                                    if(m == lo_ind) { temp = temp * lo_factor; }
-                                    if(m == hi_ind) { temp = temp * hi_factor; }
-                                    Sn[m].set(a,b,Sn[m].get(a,b)+temp);
-                                }
-                            }
-                        }
-                    }
-                }
+                zbin_ind_j = int(std::floor((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space));
+                
+                distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
+                                  zvals, n_zvals, space, Lz, A, Sn);
             } //end non-bonded interactions
-            for(int bo = 0; bo < bonds[i].size(); bo++) //begin bonded interactions
-            {
-                rb = step[s][bonds[i][bo]];
-                mind_3d(ri, rb, boxes[s], rib);
-                r = std::sqrt(rib[0]*rib[0] + rib[1]*rib[1] +rib[2]*rib[2]);
-                if(r == 0.0)
-                {
-                    std::cout << "Divide by zero in bonded interactions!" << std::endl;
-                    return EXIT_FAILURE;
-                }
-                if(std::abs(bonds[i][bo]-i) == 1)
-                {
-                    phi_p = fene(r, 30.0, 1.5);
-                }
-                else
-                {
-                    phi_p = bend(r, 10.0);
-                }
-                zbin_ind_b = int((fold(rb[2],Lz)-zvals[0]+(space/2.0))/space);
-                if(zbin_ind_i == zbin_ind_b)
-                {
-                    //make sure the particle is within the domain we're treating
-                    if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
-                    {
-                        //loop over tensor components
-                        for(int a = 0; a < 3; a++)
-                        {
-                            for(int b = 0; b <= a; b++)
-                            {
-                                temp = rib[a]*rib[b]*phi_p/(A*space*r);
-                                Sb[zbin_ind_i].set(a,b,Sb[zbin_ind_i].get(a,b)+temp);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if(zbin_ind_i < zbin_ind_b)
-                    {
-                        lo_r = ri;
-                        hi_r = rb;
-                    }
-                    else
-                    {
-                        lo_r = rb;
-                        hi_r = ri;
-                    }
-                    int lo_ind = std::min(zbin_ind_i,zbin_ind_b);
-                    int hi_ind = std::max(zbin_ind_i,zbin_ind_b);
-
-                    //see pp. 449, Fig 14.1 Allen & Tildesley 2nd Ed.
-                    double lo_factor = (zvals[std::max(lo_ind,0)]+(space/2.0)-fold(lo_r[2],Lz))/space;
-                    double hi_factor = (fold(hi_r[2],Lz)-zvals[std::min(hi_ind,n_zvals-1)]+(space/2.0))/space;
-
-                    //loop over z slabs between particles i and j
-                    for(int m = lo_ind; m <= hi_ind; m++)
-                    {
-                        //only calculate if we're within calculation domain
-                        if(m < n_zvals && m >= 0)
-                        {
-                            //loop over tensor components
-                            for(int a = 0; a < 3; a++)
-                            {
-                                for(int b = 0; b <= a; b++)
-                                {
-                                    temp = 0.5*rib[a]*rib[b]*phi_p/(A*std::abs(rib[2])*r);
-                                    if(m == lo_ind) { temp = temp * lo_factor; }
-                                    if(m == hi_ind) { temp = temp * hi_factor; }
-                                    Sb[m].set(a,b,Sb[m].get(a,b)+temp);
-                                }
-                            }
-                        }
-                    }
-                }
-            }//end bonded interactions
         }//end particle loop
 
         //get this step's tensor values and store them for blocking later
@@ -809,66 +720,70 @@ int main(int argc, char** argv)
             }
         }
     }//end timestep loop
-    std::cout << "|" << std::endl << std::endl; //finish progress bar
-
-    std::ofstream outfile;
-
-    //indices of lower-triangular matrix elements
-    int indices[] = {0, 4, 8, 3, 6, 7};
-
-    outfile.open(ofname);
-    //average the stress tensor and write to file
-    for(int i = 0; i < n_zvals; i++)
+    
+    if(!fail)
     {
-        //Divide all components by number of timesteps to average
-        for(int a = 0; a < 3; a++)
+        std::cout << "|" << std::endl << std::endl; //finish progress bar
+
+        std::ofstream outfile;
+
+        //indices of lower-triangular matrix elements
+        int indices[] = {0, 4, 8, 3, 6, 7};
+
+        outfile.open(ofname);
+        //average the stress tensor and write to file
+        for(int i = 0; i < n_zvals; i++)
         {
-            for(int b = 0; b <= a; b++)
+            //Divide all components by number of timesteps to average
+            for(int a = 0; a < 3; a++)
             {
-                Sb[i].set(a,b,Sb[i].get(a,b)/float(step.size()));
-                Sn[i].set(a,b,Sn[i].get(a,b)/float(step.size()));
-                Sk[i].set(a,b,Sk[i].get(a,b)/float(step.size()));
+                for(int b = 0; b <= a; b++)
+                {
+                    Sb[i].set(a,b,Sb[i].get(a,b)/float(step.size()));
+                    Sn[i].set(a,b,Sn[i].get(a,b)/float(step.size()));
+                    Sk[i].set(a,b,Sk[i].get(a,b)/float(step.size()));
+                }
+            }
+            //output to file: xx, yy, zz, yx, zx, zy
+            outfile << "z= " << zvals[i] << std::endl;
+            for(int m = 0; m < 6; m++)
+            {
+                outfile << Sk[i].get(indices[m]/3,indices[m]%3) << " ";
+            }
+            outfile << std::endl;
+            for(int m = 0; m < 6; m++)
+            {
+                outfile << Sb[i].get(indices[m]/3,indices[m]%3) << " ";
+            }
+            outfile << std::endl;
+            for(int m = 0; m < 6; m++)
+            {
+                outfile << Sn[i].get(indices[m]/3,indices[m]%3) << " ";
+            }
+            outfile << std::endl;
+        }
+        outfile.close();
+        std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
+
+        std::cout << "Writing timestep data to file " << tfname << std::endl;
+        std::ofstream tsfile;
+        tsfile.open(tfname);
+        for(int i = 0; i < n_zvals; i++)
+        {
+            tsfile << "z= " << zvals[i] << std::endl;
+            // output for xx, yy, zz, yx, zx, zy
+            for(int j = 0; j < 6; j++)
+            {
+                for(int k = 0; k < step.size(); k++)
+                {
+                    tsfile << S_vals[i][indices[j]][k] << " ";
+                }
+                tsfile << std::endl;
             }
         }
-        //output to file: xx, yy, zz, yx, zx, zy
-        outfile << "z= " << zvals[i] << std::endl;
-        for(int m = 0; m < 6; m++)
-        {
-            outfile << Sk[i].get(indices[m]/3,indices[m]%3) << " ";
-        }
-        outfile << std::endl;
-        for(int m = 0; m < 6; m++)
-        {
-            outfile << Sb[i].get(indices[m]/3,indices[m]%3) << " ";
-        }
-        outfile << std::endl;
-        for(int m = 0; m < 6; m++)
-        {
-            outfile << Sn[i].get(indices[m]/3,indices[m]%3) << " ";
-        }
-        outfile << std::endl;
+        tsfile.close();
     }
-    outfile.close();
-    std::cout << "Wrote stress tensor data to: " << ofname << std::endl << std::endl;
-
-    std::cout << "Writing timestep data to file " << tfname << std::endl;
-    std::ofstream tsfile;
-    tsfile.open(tfname);
-    for(int i = 0; i < n_zvals; i++)
-    {
-        tsfile << "z= " << zvals[i] << std::endl;
-        // output for xx, yy, zz, yx, zx, zy
-        for(int j = 0; j < 6; j++)
-        {
-            for(int k = 0; k < step.size(); k++)
-            {
-                tsfile << S_vals[i][indices[j]][k] << " ";
-            }
-            tsfile << std::endl;
-        }
-    }
-    tsfile.close();
-
+    
     //clean up dynamically allocated memory
     for(unsigned int i = 0; i < step.size(); i++)
     {
@@ -913,7 +828,8 @@ int main(int argc, char** argv)
     delete[] tmp_Sb;
     delete[] tmp_Sk;
     delete[] tmp_Sn;
-
+    
+    if(fail){ return EXIT_FAILURE; }
+    
     return EXIT_SUCCESS;
 }
-
