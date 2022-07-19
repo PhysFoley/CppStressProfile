@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <atomic>
 #include <thread>
+#include <chrono>
 #include "mat3.hpp"
 
 const double pi = 3.141592653589793;
@@ -164,9 +165,6 @@ std::vector<double*> boxes;
 
 // Thread variables (atomics are for thread-safety)
 std::vector<std::thread> th;
-//std::vector<std::atomic<bool> > finished;
-//std::vector<std::atomic<int> > steps_completed;
-std::atomic<bool>* finished;
 std::atomic<int>* steps_completed;
 std::atomic<bool> fail;
 
@@ -552,6 +550,7 @@ void analyze_steps(int th_id)
                 }
             }
         }
+        steps_completed[th_id] += 1;
     }//end timestep loop
     
     delete[] tmp_Sb;
@@ -740,7 +739,6 @@ int main(int argc, char** argv)
     std::cout << " and " << (boxes[0][2]/2.0) + (thickness/2.0);
     std::cout << std::endl << std::endl;
     
-    finished = new std::atomic<bool>[n_cores];
     steps_completed = new std::atomic<int>[n_cores];
     
     for(int i = 0; i < n_cores; i++)
@@ -749,7 +747,6 @@ int main(int argc, char** argv)
         Sb.push_back(new Mat3[n_zvals]);
         Sn.push_back(new Mat3[n_zvals]);
         
-        finished[i] = false;
         steps_completed[i] = 0;
     }
     
@@ -772,6 +769,40 @@ int main(int argc, char** argv)
 
     // TODO : implement progress bar by looping a wait function
     //        in the main thread and summing steps_completed
+    int n_chkpts = 30; //length of progress bar
+
+    std::cout << "Progress:" << std::endl;
+    std::cout << "start|";
+    for(int i = 0; i < n_chkpts; i++) { std::cout << " "; }
+    std::cout << "|end" << std::endl;
+    std::cout << "     |";
+    std::cout.flush();
+
+    // checkpoints for progress bar
+    std::queue<int> checkpoints;
+    for(int i = 0; i < n_chkpts; i++)
+    {
+        checkpoints.push(i*step.size()/n_chkpts);
+    }
+    
+    // write the progress bar by tracking completed steps
+    int tot_steps_comp = 0;
+    while(tot_steps_comp < step.size())
+    {
+        tot_steps_comp = 0;
+        for(int k = 0; k < n_cores; k++)
+        {
+            tot_steps_comp += steps_completed[k];
+        }
+        while(!checkpoints.empty() && (tot_steps_comp >= checkpoints.front()))
+        {
+            std::cout << "*";
+            std::cout.flush();
+            checkpoints.pop();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::cout << "|" << std::endl << std::endl; //finish progress bar
     
     // synchronize with main thread
     for(int i = 0; i < n_cores; i++)
@@ -795,8 +826,6 @@ int main(int argc, char** argv)
             }
         }
         
-        std::cout << "|" << std::endl << std::endl; //finish progress bar
-
         std::ofstream outfile;
 
         //indices of lower-triangular matrix elements
