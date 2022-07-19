@@ -433,13 +433,23 @@ void analyze_steps(int th_id)
     // number of steps to analyze
     int num = step.size() / n_cores;
     
-    // index of first step to analyze
+    // leftover steps, we need to give an extra step to some cores
+    int n_leftover = step.size() % n_cores;
+    
+    // index of first step to analyze if everyone does the same number
     int first = th_id * num;
     
-    if(th_id == n_cores - 1)
+    if(th_id < n_leftover)
     {
-        //last thread, clean up the leftovers
-        num += step.size() - (n_cores * num);
+        //do an extra step
+        num += 1
+        //offset starting index to account for other threads' extra step
+        first += th_id
+    }
+    else
+    {
+        //don't need to do any extra work, but still need to offset
+        first += n_leftover;
     }
     
     Mat3* tmp_Sk = new Mat3[n_zvals];
@@ -564,10 +574,6 @@ void analyze_steps(int th_id)
 
 int main(int argc, char** argv)
 {
-    //=========================================================
-    // Optional second way of defining interaction matrix
-    //=========================================================
-    
     //make sure interaction matrix is symmetric
     for(int i=0; i<NUM_BEAD_TYPES; i++)
     {
@@ -788,8 +794,6 @@ int main(int argc, char** argv)
         th.push_back(std::thread(analyze_steps,i));
     }
 
-    // TODO : implement progress bar by looping a wait function
-    //        in the main thread and summing steps_completed
     int n_chkpts = 30; //length of progress bar
 
     std::cout << "Progress:" << std::endl;
