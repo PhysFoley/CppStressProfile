@@ -24,9 +24,10 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include "mat3.hpp"
-
-const double pi = 3.141592653589793;
 
 //=========================================================
 // IMPORTANT: Change these constants as appriopriate
@@ -79,6 +80,44 @@ double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double) =
 //==============================================================================
 
 //=========================================================
+// Global Variables
+//=========================================================
+
+// Trajectory data
+std::vector<std::vector<double*> > step;
+std::vector<std::vector<double*> > v_step;
+std::vector<int> type;
+std::vector<std::vector<int> > bonds;
+std::vector<double*> boxes;
+
+// Thread variables (atomics are for thread-safety)
+std::vector<std::thread> th;
+std::atomic<int>* steps_completed;
+std::atomic<bool> fail;
+
+// array for storing step values to be block averaged
+double*** S_vals;
+
+// Stress tensor contributions, vector with one for each thread
+std::vector<Mat3*> Sk;
+std::vector<Mat3*> Sb;
+std::vector<Mat3*> Sn;
+
+//initialize command line args with default values
+std::stringstream ss;
+std::string ifname("centered_trajectory.vtf");
+std::string vifname("v_centered_trajectory.vtf");
+std::string ofname("stress_profile.dat");
+std::string tfname("timestep_data.dat");
+int start = 0;
+int stop = -1;
+int interval = 1;
+int n_zvals = 51;
+double thickness = 10.0;
+double kT = 1.0;
+unsigned int n_cores = 0;
+
+//=========================================================
 // Algorithm Utility Functions
 //=========================================================
 
@@ -129,9 +168,7 @@ void split_str(std::string input, std::string delim, std::vector<std::string>* r
     }
 }
 
-void load_data(std::string filename, std::string v_filename, std::vector<std::vector<double*> >* step,
-               std::vector<std::vector<double*> >* v_step, std::vector<int>* type,
-               std::vector<std::vector<int> >* bonds, std::vector<double*>* boxes,
+void load_data(std::string filename, std::string v_filename,
                int start=0, int stop=-1, int interval=1)
 {
     std::cout << "Loading trajectory positions from " << filename << std::endl;
@@ -167,8 +204,8 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss.clear();
                 ss << t[7];
                 ss >> inttemp;
-                type->push_back(inttemp);
-                bonds->push_back(std::vector<int>() );
+                type.push_back(inttemp);
+                bonds.push_back(std::vector<int>() );
             }
             else if(t[0].compare("bond") == 0)
             {
@@ -180,8 +217,8 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss.clear();
                 ss << svtemp[1];
                 ss >> inttemp2;
-                bonds->at(inttemp).push_back(inttemp2);
-                //bonds->at(inttemp2).push_back(inttemp);
+                bonds.at(inttemp).push_back(inttemp2);
+                //bonds.at(inttemp2).push_back(inttemp);
             }
             else if(t[0].compare("timestep") == 0)
             {
@@ -192,7 +229,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                     {
                         std::cout << "Loaded " << (s-start)/interval << " steps..." << std::endl;
                     }
-                    step->push_back(std::vector<double*>() );
+                    step.push_back(std::vector<double*>() );
                     ss = std::stringstream();
                 }
             }
@@ -214,7 +251,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 }
                 else if((s-start)%interval == 0 && s >= start && (s <= stop || stop == -1))
                 {
-                    boxes->push_back(box_l);
+                    boxes.push_back(box_l);
                 }
                 else
                 {
@@ -235,18 +272,18 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss << t[3];
                 ss >> coord[2];
                 
-                step->back().push_back(coord);
+                step.back().push_back(coord);
             }
         }
     }
     infile.close();
     
-    if(boxes->size() == 0)
+    if(boxes.size() == 0)
     {
-        boxes->push_back(init_box);
+        boxes.push_back(init_box);
     }
     
-    update_inter = std::ceil(float(step->size())/10.0);
+    update_inter = std::ceil(float(step.size())/10.0);
     std::cout << "Loading trajectory velocities from " << v_filename << std::endl;
     infile.open(v_filename);
     
@@ -271,7 +308,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                     {
                         std::cout << "Loaded " << (s-start)/interval << " vel steps..." << std::endl;
                     }
-                    v_step->push_back(std::vector<double*>() );
+                    v_step.push_back(std::vector<double*>() );
                     ss = std::stringstream();
                 }
             }
@@ -289,7 +326,7 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
                 ss << t[3];
                 ss >> vel[2];
                 
-                v_step->back().push_back(vel);
+                v_step.back().push_back(vel);
             }
         }
     }
@@ -302,9 +339,11 @@ void load_data(std::string filename, std::string v_filename, std::vector<std::ve
 // Distributing stress over z bins
 //=========================================================
 
+// algorithm for distributing stress tensor contributions
+// from an interaction to the intermediate bins
 void distribute_stress(double r, double *ri, double *rj, double *rij,
                        float phi_p, int zbin_i, int zbin_j, double *zvals,
-                       int n_zvals, double space, double Lz, double A, Mat3* S)
+                       double space, double Lz, double A, Mat3* S)
 {
     double temp, lo_factor, hi_factor;
     double *lo_r, *hi_r;
@@ -367,53 +406,136 @@ void distribute_stress(double r, double *ri, double *rj, double *rij,
     }
 }
 
+// the main analysis loop, to be run in parallel threads
+// infers its own workload based on thread id th_id and
+// total number of cores n_cores
+void analyze_steps(int th_id)
+{
+    // number of steps to analyze
+    int num = step.size() / n_cores;
+    
+    // index of first step to analyze
+    int first = th_id * num;
+    
+    if(th_id == n_cores - 1)
+    {
+        //last thread, clean up the leftovers
+        num += step.size() - (n_cores * num);
+    }
+    
+    Mat3* tmp_Sk = new Mat3[n_zvals];
+    Mat3* tmp_Sb = new Mat3[n_zvals];
+    Mat3* tmp_Sn = new Mat3[n_zvals];
+    
+    double r, phi_p;
+    double *ri, *rj, *rb, *rij, *rib;
+    double temp; // for storing temporary values
+    int zbin_ind_i, zbin_ind_j, zbin_ind_b;
+
+    rij = new double[3];
+    rib = new double[3];
+
+    double Lz = boxes[0][2]; //must be constant!
+    
+    double space = thickness/(n_zvals-1);
+    double* zvals = new double[n_zvals];
+    for(int i = 0; i < n_zvals; i++)
+    {
+        zvals[i]= (Lz/2.0) - (thickness/2.0) + (i*space);
+    }
+    
+    for(int s = first; !fail && (s < first+num); s++)
+    {
+        //store value of stress tensor before new calculations
+        for(int m = 0; m < n_zvals; m++)
+        {
+            tmp_Sk[m] = Sk[th_id][m];
+            tmp_Sb[m] = Sb[th_id][m];
+            tmp_Sn[m] = Sn[th_id][m];
+        }
+        double A = boxes[s][0]*boxes[s][1];
+        for(int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
+        {
+            ri = step[s][i];
+            zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
+            //loop over tensor components
+            // for(int a = 0; a < 3; a++)
+            // {
+                // for(int b = 0; b <= a; b++)
+                // {
+                    //make sure the particle is within the domain we're treating
+                    // if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
+                    // {
+                        //kinetic contribution to stress tensor (NOT ideal gas)
+                        // temp = v_step[s][i][a]*v_step[s][i][b]/(A*space);
+                        // Sk[th_id][zbin_ind_i].set(a,b,Sk[th_id][zbin_ind_i].get(a,b)-temp);
+                    // }
+                // }
+            // }
+            temp = kT/(A*space);
+            for(int k = 0; k < 3; k++) //only diagonal components of kinetic tensor (ideal gas pressure)
+            {
+                //make sure the particle is within the domain we're treating
+                if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
+                {
+                    Sk[th_id][zbin_ind_i].set(k,k,Sk[th_id][zbin_ind_i].get(k,k)-temp);
+                }
+            }
+            for(int j = 0; !fail && (j < i); j++) //loop over pairs i,j (without double-counting, hence j < i)
+            {
+                rj = step[s][j];
+                mind_3d(ri, rj, boxes[s], rij); //rij stores return value
+                r = std::sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
+                if(r > NB_CUTOFF)
+                { //out of interaction range
+                    continue;
+                }
+                else if(r < DBL_EPSILON) // r == 0
+                {
+                    std::cout << "\nDivide by zero in non-bonded interactions!" << std::endl;
+                    fail = true;
+                }
+                phi_p = forces[type[i]][type[j]](r);
+                zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
+                
+                distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
+                                  zvals, space, Lz, A, Sn[th_id]);
+            } //end non-bonded interactions
+        }//end particle loop
+
+        //get this step's tensor values and store them for blocking later
+        for(int m = 0; m < n_zvals; m++)
+        {
+            //this_step_val = end_val - begin_val
+            tmp_Sk[m] = Sk[th_id][m] - tmp_Sk[m];
+            tmp_Sb[m] = Sb[th_id][m] - tmp_Sb[m];
+            tmp_Sn[m] = Sn[th_id][m] - tmp_Sn[m];
+
+            //loop over tensor components
+            for(int a = 0; a < 3; a++)
+            {
+                for(int b = 0; b <= a; b++)
+                {
+                    S_vals[m][(a*3)+b][s] = tmp_Sk[m].get(a,b) + tmp_Sb[m].get(a,b) + tmp_Sn[m].get(a,b);
+                }
+            }
+        }
+        steps_completed[th_id] += 1;
+    }//end timestep loop
+    
+    delete[] tmp_Sb;
+    delete[] tmp_Sk;
+    delete[] tmp_Sn;
+    delete[] rij;
+    delete[] rib;
+}
+
 //=========================================================
 // Program Entrance
 //=========================================================
 
 int main(int argc, char** argv)
 {
-    //=========================================================
-    // Optional second way of defining interaction matrix
-    //=========================================================
-    
-    /*
-    forces[0][0] = f00;
-    forces[1][1] = f11;
-    forces[2][2] = f11;
-    forces[3][3] = f11;
-    forces[4][4] = f11;
-    forces[5][5] = f00;
-    forces[6][6] = f00;
-
-    forces[0][1] = forces[1][0] = f01;
-    forces[0][2] = forces[2][0] = f01;
-    forces[0][3] = forces[3][0] = f01;
-    forces[0][4] = forces[4][0] = f01;
-    forces[0][5] = forces[5][0] = f00;
-    forces[0][6] = forces[6][0] = f00;
-
-    forces[1][2] = forces[2][1] = f11;
-    forces[1][3] = forces[3][1] = f11;
-    forces[1][4] = forces[4][1] = f11;
-    forces[1][5] = forces[5][1] = f01;
-    forces[1][6] = forces[6][1] = f01;
-
-    forces[2][3] = forces[3][2] = f23;
-    forces[2][4] = forces[4][2] = f11;
-    forces[2][5] = forces[5][2] = f01;
-    forces[2][6] = forces[6][2] = f01;
-
-    forces[3][4] = forces[4][3] = f11;
-    forces[3][5] = forces[5][3] = f01;
-    forces[3][6] = forces[6][3] = f01;
-    
-    forces[4][5] = forces[5][4] = f01;
-    forces[4][6] = forces[6][4] = f01;
-
-    forces[5][6] = forces[6][5] = f00;
-    */
-    
     //make sure interaction matrix is symmetric
     for(int i=0; i<NUM_BEAD_TYPES; i++)
     {
@@ -427,19 +549,6 @@ int main(int argc, char** argv)
             }
         }
     }
-
-    //initialize command line args with default values
-    std::stringstream ss;
-    std::string ifname("centered_trajectory.vtf");
-    std::string vifname("v_centered_trajectory.vtf");
-    std::string ofname("stress_profile.dat");
-    std::string tfname("timestep_data.dat");
-    int start = 0;
-    int stop = -1;
-    int interval = 1;
-    int n_zvals = 25;
-    double thickness = 10.0;
-    double kT = 1.0;
 
     //parse command line args
     for(int i=1; i<argc-1; i+=2)
@@ -500,28 +609,51 @@ int main(int argc, char** argv)
             ss >> vifname;
             ss.clear();
         }
+        else if(std::string(argv[i]).compare("-c") == 0)
+        {
+            ss << argv[i+1];
+            ss >> n_cores;
+            ss.clear();
+        }
+    }
+    
+    // if core count is still default value
+    if(n_cores == 0)
+    {
+        // check whether slurm environment variable is set
+        char* env = std::getenv("SLURM_CPUS_PER_TASK");
+        if(!env)
+        { // not set, default to 1
+            n_cores = 1;
+            std::cout << std::endl << "Defaulting to single-core." << std::endl;
+        }
+        else
+        {
+            n_cores = std::atoi(env);
+            std::cout << std::endl << "Inferring parallelization from Slurm:\n";
+            std::cout << "SLURM_CPUS_PER_TASK == " << n_cores << std::endl;
+        }
+    }
+    
+    if(n_cores > std::thread::hardware_concurrency())
+    {
+        std::cout << "\nWARNING: Thread count is greater than CPUs available!\n";
     }
     
     // beyond this point, don't just return exit_failure, because there
     // is a bunch of dynamic memory that needs to be freed. Set the
     // fail flag to true instead, so we carry through to memory cleanup.
-    bool fail = false;
-
-    std::vector<std::vector<double*> > step;
-    std::vector<std::vector<double*> > v_step;
-    std::vector<int> type;
-    std::vector<std::vector<int> > bonds;
-    std::vector<double*> boxes;
-
-    std::cout << std::endl;
-
+    fail = false;
+    
     bool NVT = false; // default assumption, to be checked later
-    load_data(ifname, vifname, &step, &v_step, &type, &bonds, &boxes, start, stop, interval);
+
+    // load trajectory data from vtf file
+    std::cout << std::endl;
+    load_data(ifname, vifname, start, stop, interval);
 
     std::cout << "Loaded:" << std::endl;
     std::cout << "       " << type.size() << " particles" << std::endl;
-    std::cout << "       " << step.size() << " coordinate timesteps" << std::endl;
-    std::cout << "       " << v_step.size() << " velocity timesteps" << std::endl;
+    std::cout << "       " << step.size() << " timesteps" << std::endl;
     std::cout << "       " << boxes.size() << " box geometries" << std::endl;
     std::cout << std::endl << std::endl;
 
@@ -595,22 +727,26 @@ int main(int argc, char** argv)
     {
         zvals[i]= (boxes[0][2]/2.0) - (thickness/2.0) + (i*space);
     }
+    
     std::cout << std::endl << "Calculating stress at " << n_zvals;
     std::cout << " evenly spaced z values between ";
-    std::cout << zvals[0];
-    std::cout << " and " << zvals[n_zvals-1];
+    std::cout << (boxes[0][2]/2.0) - (thickness/2.0);
+    std::cout << " and " << (boxes[0][2]/2.0) + (thickness/2.0);
     std::cout << std::endl << std::endl;
-
-    Mat3* Sk = new Mat3[n_zvals];
-    Mat3* Sb = new Mat3[n_zvals];
-    Mat3* Sn = new Mat3[n_zvals];
-
-    Mat3* tmp_Sk = new Mat3[n_zvals];
-    Mat3* tmp_Sb = new Mat3[n_zvals];
-    Mat3* tmp_Sn = new Mat3[n_zvals];
-
-    //array for storing step values to be block averaged
-    double*** S_vals = new double**[n_zvals];
+    
+    steps_completed = new std::atomic<int>[n_cores];
+    
+    for(int i = 0; i < n_cores; i++)
+    {
+        Sk.push_back(new Mat3[n_zvals]);
+        Sb.push_back(new Mat3[n_zvals]);
+        Sn.push_back(new Mat3[n_zvals]);
+        
+        steps_completed[i] = 0;
+    }
+    
+    // populate S_vals
+    S_vals = new double**[n_zvals];
     for(int i = 0; i < n_zvals; i++)
     {
         S_vals[i] = new double*[9];
@@ -619,17 +755,15 @@ int main(int argc, char** argv)
             S_vals[i][j] = new double[step.size()];
         }
     }
+    
+    // Spawn threads and calculate!
+    for(int i = 0; i < n_cores; i++)
+    {
+        th.push_back(std::thread(analyze_steps,i));
+    }
 
-    double r, phi_p;
-    double *ri, *rj, *rb, *rij, *rib;
-    double temp; // for storing temporary values
-    int zbin_ind_i, zbin_ind_j, zbin_ind_b;
-
-    rij = new double[3];
-    rib = new double[3];
-
-    double Lz = boxes[0][2]; //must be constant!
-
+    // TODO : implement progress bar by looping a wait function
+    //        in the main thread and summing steps_completed
     int n_chkpts = 30; //length of progress bar
 
     std::cout << "Progress:" << std::endl;
@@ -639,92 +773,54 @@ int main(int argc, char** argv)
     std::cout << "     |";
     std::cout.flush();
 
+    // checkpoints for progress bar
     std::queue<int> checkpoints;
     for(int i = 0; i < n_chkpts; i++)
     {
         checkpoints.push(i*step.size()/n_chkpts);
     }
-
-    for(int s = 0; !fail && (s < step.size()); s++)
+    
+    // write the progress bar by tracking completed steps
+    int tot_steps_comp = 0;
+    while(tot_steps_comp < step.size())
     {
-        //store value of stress tensor before new calculations
-        for(int m = 0; m < n_zvals; m++)
+        tot_steps_comp = 0;
+        for(int k = 0; k < n_cores; k++)
         {
-            tmp_Sk[m] = Sk[m];
-            tmp_Sb[m] = Sb[m];
-            tmp_Sn[m] = Sn[m];
+            tot_steps_comp += steps_completed[k];
         }
-        //update the progress bar
-        if(s == checkpoints.front())
+        while(!checkpoints.empty() && (tot_steps_comp >= checkpoints.front()))
         {
             std::cout << "*";
             std::cout.flush();
             checkpoints.pop();
         }
-        double A = boxes[s][0]*boxes[s][1];
-        for(int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
-        {
-            ri = step[s][i];
-            zbin_ind_i = int(std::floor((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space));
-            //loop over tensor components
-            for(int a = 0; a < 3; a++)
-            {
-                for(int b = 0; b <= a; b++)
-                {
-                    //make sure the particle is within the domain we're treating
-                    if(zbin_ind_i < n_zvals && zbin_ind_i >= 0)
-                    {
-                        //kinetic contribution to stress tensor (NOT ideal gas)
-                        temp = v_step[s][i][a]*v_step[s][i][b]/(A*space);
-                        Sk[zbin_ind_i].set(a,b,Sk[zbin_ind_i].get(a,b)-temp);
-                    }
-                }
-            }
-            for(int j = 0; !fail && (j < i); j++) //loop over pairs i,j (without double-counting, hence j < i)
-            {
-                rj = step[s][j];
-                mind_3d(ri, rj, boxes[s], rij); //rij stores return value
-                r = std::sqrt(rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2]);
-                if(r > NB_CUTOFF)
-                { //out of interaction range
-                    continue;
-                }
-                else if(r < DBL_EPSILON) // r == 0
-                {
-                    std::cout << "\nDivide by zero in non-bonded interactions!" << std::endl;
-                    fail = true;
-                }
-                phi_p = forces[type[i]][type[j]](r);
-                zbin_ind_j = int(std::floor((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space));
-                
-                distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
-                                  zvals, n_zvals, space, Lz, A, Sn);
-            } //end non-bonded interactions
-        }//end particle loop
-
-        //get this step's tensor values and store them for blocking later
-        for(int m = 0; m < n_zvals; m++)
-        {
-            //this_step_val = end_val - begin_val
-            tmp_Sk[m] = Sk[m] - tmp_Sk[m];
-            tmp_Sb[m] = Sb[m] - tmp_Sb[m];
-            tmp_Sn[m] = Sn[m] - tmp_Sn[m];
-
-            //loop over tensor components
-            for(int a = 0; a < 3; a++)
-            {
-                for(int b = 0; b <= a; b++)
-                {
-                    S_vals[m][(a*3)+b][s] = tmp_Sk[m].get(a,b) + tmp_Sb[m].get(a,b) + tmp_Sn[m].get(a,b);
-                }
-            }
-        }
-    }//end timestep loop
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::cout << "|" << std::endl << std::endl; //finish progress bar
+    
+    // synchronize with main thread
+    for(int i = 0; i < n_cores; i++)
+    {
+        th[i].join();
+    }
     
     if(!fail)
     {
-        std::cout << "|" << std::endl << std::endl; //finish progress bar
-
+        // Sum up the results ffrom all threads
+        Mat3* tot_Sk = new Mat3[n_zvals];
+        Mat3* tot_Sb = new Mat3[n_zvals];
+        Mat3* tot_Sn = new Mat3[n_zvals];
+        for(int i = 0; i < n_zvals; i++)
+        {
+            for(int j =0; j < n_cores; j++)
+            {
+                tot_Sk[i] = tot_Sk[i] + Sk[j][i];
+                tot_Sb[i] = tot_Sb[i] + Sb[j][i];
+                tot_Sn[i] = tot_Sn[i] + Sn[j][i];
+            }
+        }
+        
         std::ofstream outfile;
 
         //indices of lower-triangular matrix elements
@@ -739,26 +835,26 @@ int main(int argc, char** argv)
             {
                 for(int b = 0; b <= a; b++)
                 {
-                    Sb[i].set(a,b,Sb[i].get(a,b)/float(step.size()));
-                    Sn[i].set(a,b,Sn[i].get(a,b)/float(step.size()));
-                    Sk[i].set(a,b,Sk[i].get(a,b)/float(step.size()));
+                    tot_Sb[i].set(a,b,tot_Sb[i].get(a,b)/float(step.size()));
+                    tot_Sn[i].set(a,b,tot_Sn[i].get(a,b)/float(step.size()));
+                    tot_Sk[i].set(a,b,tot_Sk[i].get(a,b)/float(step.size()));
                 }
             }
             //output to file: xx, yy, zz, yx, zx, zy
             outfile << "z= " << zvals[i] << std::endl;
             for(int m = 0; m < 6; m++)
             {
-                outfile << Sk[i].get(indices[m]/3,indices[m]%3) << " ";
+                outfile << tot_Sk[i].get(indices[m]/3,indices[m]%3) << " ";
             }
             outfile << std::endl;
             for(int m = 0; m < 6; m++)
             {
-                outfile << Sb[i].get(indices[m]/3,indices[m]%3) << " ";
+                outfile << tot_Sb[i].get(indices[m]/3,indices[m]%3) << " ";
             }
             outfile << std::endl;
             for(int m = 0; m < 6; m++)
             {
-                outfile << Sn[i].get(indices[m]/3,indices[m]%3) << " ";
+                outfile << tot_Sn[i].get(indices[m]/3,indices[m]%3) << " ";
             }
             outfile << std::endl;
         }
@@ -782,6 +878,10 @@ int main(int argc, char** argv)
             }
         }
         tsfile.close();
+        
+        delete[] tot_Sb;
+        delete[] tot_Sk;
+        delete[] tot_Sn;
     }
     
     //clean up dynamically allocated memory
@@ -790,13 +890,6 @@ int main(int argc, char** argv)
         for(unsigned int j = 0; j < step[i].size(); j++)
         {
             delete[] step[i][j];
-        }
-    }
-    for(unsigned int i = 0; i < v_step.size(); i++)
-    {
-        for(unsigned int j = 0; j < v_step[i].size(); j++)
-        {
-            delete[] v_step[i][j];
         }
     }
     for(int i = 0; i < n_zvals; i++)
@@ -819,15 +912,7 @@ int main(int argc, char** argv)
             delete[] boxes[i];
         }
     }
-    delete[] rij;
-    delete[] rib;
     delete[] zvals;
-    delete[] Sb;
-    delete[] Sk;
-    delete[] Sn;
-    delete[] tmp_Sb;
-    delete[] tmp_Sk;
-    delete[] tmp_Sn;
     
     if(fail){ return EXIT_FAILURE; }
     
