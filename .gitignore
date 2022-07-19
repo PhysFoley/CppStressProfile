@@ -22,6 +22,7 @@ profile_eom.dat
 
 # test run script
 run.sh
+outstress.txt
 
 # Node artifact files
 node_modules/

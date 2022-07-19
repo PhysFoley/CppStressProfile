@@ -29,8 +29,6 @@
 #include <chrono>
 #include "mat3.hpp"
 
-const double pi = 3.141592653589793;
-
 //=========================================================
 // IMPORTANT: Change these constants as appriopriate
 //=========================================================
@@ -69,7 +67,7 @@ double cos2(double r, double rc, double wc, double eps)
     }
     else
     {
-        return (pi*eps/(2.0*wc))*std::sin(pi*(r-rc)/wc);
+        return (M_PI*eps/(2.0*wc))*std::sin(M_PI*(r-rc)/wc);
     }
 }
 
@@ -187,7 +185,7 @@ int interval = 1;
 int n_zvals = 51;
 double thickness = 10.0;
 double kT = 1.4;
-unsigned int n_cores = 1;
+unsigned int n_cores = 0;
 
 //=========================================================
 // Algorithm Utility Functions
@@ -643,6 +641,29 @@ int main(int argc, char** argv)
             ss >> n_cores;
             ss.clear();
         }
+    }
+    
+    // if core count is still default value
+    if(n_cores == 0)
+    {
+        // check whether slurm environment variable is set
+        char* env = std::getenv("SLURM_CPUS_PER_TASK");
+        if(!env)
+        { // not set, default to 1
+            n_cores = 1;
+            std::cout << std::endl << "Defaulting to single-core." << std::endl;
+        }
+        else
+        {
+            n_cores = std::atoi(env);
+            std::cout << std::endl << "Inferring parallelization from Slurm:\n";
+            std::cout << "SLURM_CPUS_PER_TASK == " << n_cores << std::endl;
+        }
+    }
+    
+    if(n_cores > std::thread::hardware_concurrency())
+    {
+        std::cout << "\nWARNING: Thread count is greater than CPUs available!\n";
     }
     
     // beyond this point, don't just return exit_failure, because there
