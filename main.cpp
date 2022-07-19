@@ -414,13 +414,24 @@ void analyze_steps(int th_id)
     // number of steps to analyze
     int num = step.size() / n_cores;
     
-    // index of first step to analyze
+    // leftover steps, we need to give an extra step to some cores
+    int n_leftover = step.size() % n_cores;
+    
+    // index of first step to analyze if everyone does the same number
     int first = th_id * num;
     
-    if(th_id == n_cores - 1)
+    // does this thread need to do an extra step?
+    if(th_id < n_leftover)
     {
-        //last thread, clean up the leftovers
-        num += step.size() - (n_cores * num);
+        //do an extra step
+        num += 1;
+        //offset starting index to account for other threads' extra step
+        first += th_id;
+    }
+    else
+    {
+        //don't need to do any extra work, but still need to offset
+        first += n_leftover;
     }
     
     Mat3* tmp_Sk = new Mat3[n_zvals];
