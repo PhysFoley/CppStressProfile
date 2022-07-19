@@ -439,6 +439,7 @@ void analyze_steps(int th_id)
     // index of first step to analyze if everyone does the same number
     int first = th_id * num;
     
+    // does this thread need to do an extra step?
     if(th_id < n_leftover)
     {
         //do an extra step
