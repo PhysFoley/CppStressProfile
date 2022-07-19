@@ -442,9 +442,9 @@ void analyze_steps(int th_id)
     if(th_id < n_leftover)
     {
         //do an extra step
-        num += 1
+        num += 1;
         //offset starting index to account for other threads' extra step
-        first += th_id
+        first += th_id;
     }
     else
     {
