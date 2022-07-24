@@ -168,8 +168,8 @@ void split_str(std::string input, std::string delim, std::vector<std::string>* r
     }
 }
 
-void load_data(std::string filename, std::string v_filename,
-               int start=0, int stop=-1, int interval=1)
+void load_data(std::string filename, std::string v_filename, int start=0,
+               int stop=-1, int interval=1)
 {
     std::cout << "Loading trajectory positions from " << filename << std::endl;
 
@@ -349,6 +349,14 @@ void distribute_stress(double r, double *ri, double *rj, double *rij,
     double *lo_r, *hi_r;
     int lo_ind, hi_ind;
     
+    double zi = fold(ri[2],Lz);
+    double zj = fold(rj[2],Lz);
+    
+    if((zi-zj)*rij[2] < 0)
+    { // if this is true, the min img dist is across periodic dir, not bins
+        return;
+    }
+    
     if(zbin_i == zbin_j)
     {
         //make sure the particle is within the domain we're treating
@@ -468,7 +476,7 @@ void analyze_steps(int th_id)
         for(int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
         {
             ri = step[s][i];
-            zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
+            zbin_ind_i = int(std::floor((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space));
             //loop over tensor components
             // for(int a = 0; a < 3; a++)
             // {
@@ -507,7 +515,7 @@ void analyze_steps(int th_id)
                     fail = true;
                 }
                 phi_p = forces[type[i]][type[j]](r);
-                zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
+                zbin_ind_j = int(std::floor((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space));
                 
                 distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
                                   zvals, space, Lz, A, Sn[th_id]);
@@ -541,26 +549,8 @@ void analyze_steps(int th_id)
     delete[] rib;
 }
 
-//=========================================================
-// Program Entrance
-//=========================================================
-
-int main(int argc, char** argv)
+void parse_args(int argc, char** argv)
 {
-    //make sure interaction matrix is symmetric
-    for(int i=0; i<NUM_BEAD_TYPES; i++)
-    {
-        for(int j=0; j<i; j++)
-        {
-            if(forces[i][j] != forces[j][i])
-            {
-                std::cout << "Error: Interaction matrix must be symmetric!";
-                std::cout << std::endl;
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
     //parse command line args
     for(int i=1; i<argc-1; i+=2)
     {
@@ -650,6 +640,31 @@ int main(int argc, char** argv)
     {
         std::cout << "\nWARNING: Thread count is greater than CPUs available!\n";
     }
+}
+
+
+//=========================================================
+// Program Entrance
+//=========================================================
+
+int main(int argc, char** argv)
+{
+    //make sure interaction matrix is symmetric
+    for(int i=0; i<NUM_BEAD_TYPES; i++)
+    {
+        for(int j=0; j<i; j++)
+        {
+            if(forces[i][j] != forces[j][i])
+            {
+                std::cout << "Error: Interaction matrix must be symmetric!";
+                std::cout << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+    }
+    
+    // read command line arguments
+    parse_args(argc, argv);
     
     // beyond this point, don't just return exit_failure, because there
     // is a bunch of dynamic memory that needs to be freed. Set the
