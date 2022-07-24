@@ -368,6 +368,14 @@ void distribute_stress(double r, double *ri, double *rj, double *rij,
     double *lo_r, *hi_r;
     int lo_ind, hi_ind;
     
+    double zi = fold(ri[2],Lz);
+    double zj = fold(rj[2],Lz);
+    
+    if((zi-zj)*rij[2] < 0)
+    { // if this is true, the min img dist is across periodic dir, not bins
+        return;
+    }
+    
     if(zbin_i == zbin_j)
     {
         //make sure the particle is within the domain we're treating
