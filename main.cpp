@@ -175,10 +175,10 @@ std::vector<Mat3*> Sb;
 std::vector<Mat3*> Sn;
 
 //initialize command line args with default values
-std::stringstream ss;
 std::string ifname("centered_trajectory.vtf");
 std::string ofname("stress_profile.dat");
 std::string tfname("timestep_data.dat");
+std::string stdfname("profile_std.dat");
 int start = 0;
 int stop = -1;
 int interval = 1;
@@ -191,7 +191,7 @@ unsigned int n_cores = 0;
 // Algorithm Utility Functions
 //=========================================================
 
-double fold(double r, double box_l)
+double fold(const double r, const double box_l)
 {
     if(r >= 0.0)
     {
@@ -203,13 +203,13 @@ double fold(double r, double box_l)
     }
 }
 
-double mind(double dr, double box_l)
+double mind(const double dr, const double box_l)
 {
     return dr - box_l*std::floor( (dr/box_l) + 0.5);
 }
 
 //Note: min_dr stores return value
-void mind_3d(double* ri, double* rj, double* box_l, double* min_dr)
+void mind_3d(const double* ri, const double* rj, const double* box_l, double* min_dr)
 {
     for(int k=0; k<3; k++)
     {
@@ -352,6 +352,61 @@ void load_data(std::string filename, int start=0, int stop=-1, int interval=1)
     }
 
     std::cout << "Finished Loading File.\n" << std::endl;
+}
+
+//=========================================================
+// Blocking Algorithm
+//=========================================================
+
+// takes an array of doubles and its length n
+// returns standard deviation of array (unbiased estimator)
+double stdev(double *vals, int n)
+{
+    double sum = 0.0;
+    double sumsq = 0.0;
+    for(int i=0; i<n; i++)
+    {
+        sum += vals[i];
+        sumsq += vals[i]*vals[i];
+    }
+    float N = float(n);
+    return std::sqrt( (sumsq/(N-1.0)) - (sum*sum/(N*(N-1.0))) );
+}
+
+// takes an array of doubles and its length n
+// blocks the array in-place, so that the array
+// variable passed in now contains as its elements
+// the averages of neighboring pairs of values
+// that were originally in the array, and hence there
+// are now half as many elements
+// returns the number of elements that are now meaningful
+// in the array
+int block(double *vals, int n)
+{
+    for(int i=0; i<n/2; i++)
+    {
+        vals[i] = (vals[2*i] + vals[(2*i)+1]) / 2.0;
+    }
+    return n/2;
+}
+
+// takes an array of doubles and its length n
+// returns blocked error on mean (est of std of dist of mean)
+// WARNING: modifies vals IN PLACE; destroys array contents
+double err_on_mean(double *vals, int n)
+{
+    double maxsig = 0.0;
+    double sig = 0.0;
+    while(n > 2)
+    {
+        sig = stdev(vals, n)/std::sqrt(float(n) - 1.0);
+        if(sig > maxsig)
+        {
+            maxsig = sig;
+        }
+        n = block(vals, n);
+    }
+    return maxsig;
 }
 
 //=========================================================
@@ -567,6 +622,7 @@ void analyze_steps(int th_id)
                 }
             }
         }
+        //increment completion counter for this thread
         steps_completed[th_id] += 1;
     }//end timestep loop
     
@@ -575,28 +631,12 @@ void analyze_steps(int th_id)
     delete[] tmp_Sn;
     delete[] rij;
     delete[] rib;
+    delete[] zvals;
 }
 
-//=========================================================
-// Program Entrance
-//=========================================================
-
-int main(int argc, char** argv)
+void parse_args(int argc, char** argv)
 {
-    //make sure interaction matrix is symmetric
-    for(int i=0; i<NUM_BEAD_TYPES; i++)
-    {
-        for(int j=0; j<i; j++)
-        {
-            if(forces[i][j] != forces[j][i])
-            {
-                std::cout << "Error: Interaction matrix must be symmetric!";
-                std::cout << std::endl;
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
+    std::stringstream ss;
     //parse command line args
     for(int i=1; i<argc-1; i+=2)
     {
@@ -638,6 +678,12 @@ int main(int argc, char** argv)
             ss >> thickness;
             ss.clear();
         }
+        else if(std::string(argv[i]).compare("-s") == 0)
+        {
+            ss << argv[i+1];
+            ss >> stdfname;
+            ss.clear();
+        }
         else if(std::string(argv[i]).compare("-t") == 0)
         {
             ss << argv[i+1];
@@ -657,6 +703,30 @@ int main(int argc, char** argv)
             ss.clear();
         }
     }
+}
+
+//=========================================================
+// Program Entrance
+//=========================================================
+
+int main(int argc, char** argv)
+{
+    //make sure interaction matrix is symmetric
+    for(int i=0; i<NUM_BEAD_TYPES; i++)
+    {
+        for(int j=0; j<i; j++)
+        {
+            if(forces[i][j] != forces[j][i])
+            {
+                std::cout << "Error: Interaction matrix must be symmetric!";
+                std::cout << std::endl;
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+    // handle command-line arguments
+    parse_args(argc, argv);
     
     // if core count is still default value
     if(n_cores == 0)
@@ -679,6 +749,7 @@ int main(int argc, char** argv)
     if(n_cores > std::thread::hardware_concurrency())
     {
         std::cout << "\nWARNING: Thread count is greater than CPUs available!\n";
+        std::cout << "         Execution will continue, but expect performance degredation\n";
     }
     
     // beyond this point, don't just return exit_failure, because there
@@ -686,10 +757,10 @@ int main(int argc, char** argv)
     // fail flag to true instead, so we carry through to memory cleanup.
     fail = false;
     
-    bool NVT = false; // default assumption, to be checked later
+    bool NVT = false; // default assumption, will be checked later
 
-    // load trajectory data from vtf file
     std::cout << std::endl;
+    // load trajectory data from vtf file
     load_data(ifname, start, stop, interval);
 
     std::cout << "Loaded:" << std::endl;
@@ -846,7 +917,7 @@ int main(int argc, char** argv)
     
     if(!fail)
     {
-        // Sum up the results ffrom all threads
+        // Sum up the results from all threads
         Mat3* tot_Sk = new Mat3[n_zvals];
         Mat3* tot_Sb = new Mat3[n_zvals];
         Mat3* tot_Sn = new Mat3[n_zvals];
@@ -917,6 +988,21 @@ int main(int argc, char** argv)
             }
         }
         tsfile.close();
+        
+        std::ofstream stdfile;
+        stdfile.open(stdfname);
+        std::cout << "Calculating error on mean by block averaging..." << std::endl;
+        //calculate standard dev via blocking and write to file
+        for(int i = 0; i < n_zvals; i++)
+        {
+            stdfile << "z= " << zvals[i] << std::endl;
+            for(int j = 0; j < 6; j++)
+            {
+                stdfile << err_on_mean(S_vals[i][indices[j]], step.size()) << " ";
+            }
+            stdfile << std::endl;
+        }
+        stdfile.close();
         
         delete[] tot_Sb;
         delete[] tot_Sk;
