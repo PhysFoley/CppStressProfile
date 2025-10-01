@@ -12,7 +12,8 @@ The Python pre- and post-analysis files centertraj.py, blockeom.py, and plotresu
 The functions defining the forces between beads of different types and their parameters are specified in a file called "params.hpp". This repository provides three such parameter headers:
 * `default_params.hpp` : [Original Cooke lipid model](https://doi.org/10.1063/1.2135785)
 * `flipfix_params.hpp` : [Flipfixed 4-bead Cooke lipids](https://doi.org/10.1021/acs.jctc.0c00862)
-* `tapared_params.hpp` : [Tapered flipfixed 4-bead Cooke lipids](https://doi.org/10.1063/5.0189771)
+* `taper_params.hpp` : [Tapered flipfixed 4-bead Cooke lipids](https://doi.org/10.1063/5.0189771)
+
 In all cases, the conventions for bead type numbering follow those given in the simulation templates found [here](https://github.com/PhysFoley/pymbtools). Re-name the desired file to `params.hpp` before compiling, or write your own custom file tailored to your simulation. If `params.hpp` is not found, the code will compile with `default_params.hpp` and emit a warning.
 
 To compile the main stress profile code, simply invoke `make` to generate the `stresscalc` executable.
