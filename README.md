@@ -9,7 +9,13 @@ The Python pre- and post-analysis files centertraj.py, blockeom.py, and plotresu
 
 ## Usage
 
-The initial portion of main.cpp must be modified as indicated in the code comments to incude the number of distinct particle types, maximum non-bonded interaction cutoff, derivatives of non-bonded interaction potentials, and the interaction matrix. The code as is comes pre-set to work for a simulation of flip-fixed 4-bead Cooke lipids, as described in [Foley & Deserno JCTC 2020](https://doi.org/10.1021/acs.jctc.0c00862). To compile the main stress profile code, simply invoke `make` to generate the `stresscalc` executable.
+The functions defining the forces between beads of different types and their parameters are specified in a file called "params.hpp". This repository provides three such parameter headers:
+* `default_params.hpp` : [Original Cooke lipid model](https://doi.org/10.1063/1.2135785)
+* `flipfix_params.hpp` : [Flipfixed 4-bead Cooke lipids](https://doi.org/10.1021/acs.jctc.0c00862)
+* `tapared_params.hpp` : [Tapered flipfixed 4-bead Cooke lipids](https://doi.org/10.1063/5.0189771)
+In all cases, the conventions for bead type numbering follow those given in the simulation templates found [here](https://github.com/PhysFoley/pymbtools). Re-name the desired file to `params.hpp` before compiling, or write your own custom file tailored to your simulation. If `params.hpp` is not found, the code will compile with `default_params.hpp` and emit a warning.
+
+To compile the main stress profile code, simply invoke `make` to generate the `stresscalc` executable.
 
 The code requires trajectories to be in the VTF format written out by [ESPResSo MD](https://espressomd.org). The VTF trajectory file must be pre-processed such that the membrane is always located in the center of the box in the z-direction; this is done with
 `python centertraj.py trajectory.vtf`
