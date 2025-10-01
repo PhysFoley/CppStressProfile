@@ -3,7 +3,7 @@ Numerical software to calculate stress tensor components of laterally homogeneou
 
 ## Requirements
 
-For the main code, the only requirement is a C++14 compiler; there are no dependencies beyond the standard libraries.
+For the main code, the only requirement is a C++17 compiler; there are no dependencies beyond the standard libraries.
 
 The Python pre- and post-analysis files centertraj.py, blockeom.py, and plotresults.py depend on NumPy, SciPy, and MatPlotLib.
 

@@ -28,132 +28,20 @@
 #include <thread>
 #include <chrono>
 #include "mat3.hpp"
+#include "forces.hpp"
 
-//=========================================================
-// IMPORTANT: Change these constants as appriopriate
-//=========================================================
-
-//make sure this matches the number of distinct bead types!
-const int NUM_BEAD_TYPES = 7;
-
-//make sure this is larger than longest-range non-bonded interaction!
-const double NB_CUTOFF = 3.0;
-
-//=========================================================
-// Derivatives of Interaction Potentials
-//=========================================================
-
-double lj(double r, double b, double rc, double eps)
-{
-    if(r <= rc)
-    {
-        return 24.0*eps*( (std::pow(b,6.0)/std::pow(r,7.0)) - (2.0*std::pow(b,12.0)/std::pow(r,13.0)) );
-    }
-    else
-    {
-        return 0.0;
-    }
-}
-
-double cos2(double r, double rc, double wc, double eps)
-{
-    if(r <= rc)
-    {
-        return 0.0;
-    }
-    else if(r > rc + wc)
-    {
-        return 0.0;
-    }
-    else
-    {
-        return (M_PI*eps/(2.0*wc))*std::sin(M_PI*(r-rc)/wc);
-    }
-}
-
-double fene(double r, double k, double rinf)
-{
-    return k*r/(1.0 - std::pow(r/rinf,2.0) );
-}
-
-double bend(double r, double k)
-{
-    return k*(r-4.0);
-}
-
-double ljcos2(double r, double b, double eps, double rc, double wc)
-{
-    return lj(r, b, rc, eps) + cos2(r, rc, wc, eps);
-}
-
-double f00(double r)
-{
-    if(r <= 0.95*std::pow(2.0,1.0/6.0) )
-    {
-        return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
-    }
-    else
-    {
-        return 0.0;
-    }
-}
-
-double f01(double r)
-{
-    if(r <= 0.95*std::pow(2.0,1.0/6.0) )
-    {
-        return 24.0*( (std::pow(0.95,6.0)/std::pow(r,7.0)) - (2.0*std::pow(0.95,12.0)/std::pow(r,13.0)) );
-    }
-    else
-    {
-        return 0.0;
-    }
-}
-
-double f11(double r)
-{
-    return lj(r, 1.0, std::pow(2.0,1.0/6.0), 1.0) + cos2(r, std::pow(2.0,1.0/6.0), 1.6, 1.0);
-}
-
-double f23(double r)
-{
-    if(r <= std::pow(2.0,1.0/6.0) )
-    {
-        return 24.0*( 1.0/std::pow(r,7.0) - (2.0/std::pow(r,13.0)) );
-    }
-    else
-    {
-        return 0.0;
-    }
-}
-
-//=========================================================
-// Define Interaction Matrix
-//=========================================================
-
-double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double) =
-{
-/*         0     1     2     3     4     5     6    */
-/* 0 */  {f00,  f01,  f01,  f01,  f01,  f00,  f00},
-/* 1 */  {f01,  f11,  f11,  f11,  f11,  f01,  f01},
-/* 2 */  {f01,  f11,  f11,  f23,  f11,  f01,  f01},
-/* 3 */  {f01,  f11,  f23,  f11,  f11,  f01,  f01},
-/* 4 */  {f01,  f11,  f11,  f11,  f11,  f01,  f01},
-/* 5 */  {f00,  f01,  f01,  f01,  f01,  f00,  f00},
-/* 6 */  {f00,  f01,  f01,  f01,  f01,  f00,  f00}
-};
-
-//==============================================================================
-//==============================================================================
-//
-//      USER MODIFICATIONS SHOULD NOT BE NECESSARY BEYOND THIS POINT
-//
-//==============================================================================
-//==============================================================================
+#if __has_include("params.hpp")
+    #include "params.hpp"
+#else
+    #include "default_params.hpp"
+#endif
 
 //=========================================================
 // Global Variables
 //=========================================================
+
+// interaction matrix
+double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(double,int,int);
 
 // Trajectory data
 std::vector<std::vector<double*> > step;
@@ -574,7 +462,7 @@ void analyze_steps(int th_id)
                     std::cout << "\nDivide by zero in non-bonded interactions!" << std::endl;
                     fail = true;
                 }
-                phi_p = forces[type[i]][type[j]](r);
+                phi_p = -forces[type[i]][type[j]](r,type[i],type[j]);
                 zbin_ind_j = int((fold(rj[2],Lz)-zvals[0]+(space/2.0))/space);
                 
                 distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
@@ -592,11 +480,11 @@ void analyze_steps(int th_id)
                 }
                 if(std::abs(bonds[i][bo]-i) == 1)
                 {
-                    phi_p = fene(r, 30.0, 1.5);
+                    phi_p = -fene(r, 30.0, 1.5);
                 }
                 else
                 {
-                    phi_p = bend(r, 10.0);
+                    phi_p = -bend(r, 10.0);
                 }
                 zbin_ind_b = int((fold(rb[2],Lz)-zvals[0]+(space/2.0))/space);
                 
@@ -637,7 +525,7 @@ void analyze_steps(int th_id)
 void parse_args(int argc, char** argv)
 {
     std::stringstream ss;
-    //parse command line args
+    //parse built-in command line args
     for(int i=1; i<argc-1; i+=2)
     {
         if(std::string(argv[i]).compare("-f") == 0)
@@ -703,6 +591,8 @@ void parse_args(int argc, char** argv)
             ss.clear();
         }
     }
+    // parse any user-defined cmd args
+    parse_user_args(argc,argv);
 }
 
 //=========================================================
@@ -711,7 +601,13 @@ void parse_args(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    //make sure interaction matrix is symmetric
+    // handle command-line arguments
+    parse_args(argc, argv);
+
+    // call user-defined interaction matrix setup function
+    setup_interaction_matrix(forces);
+
+    // make sure interaction matrix is symmetric
     for(int i=0; i<NUM_BEAD_TYPES; i++)
     {
         for(int j=0; j<i; j++)
@@ -724,9 +620,6 @@ int main(int argc, char** argv)
             }
         }
     }
-
-    // handle command-line arguments
-    parse_args(argc, argv);
     
     // if core count is still default value
     if(n_cores == 0)

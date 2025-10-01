@@ -1,5 +1,4 @@
-#ifndef _MAT3_HPP
-#define _MAT3_HPP
+#pragma once
 
 class Mat3
 {
@@ -15,5 +14,3 @@ public:
     double get(int row, int col) const;
     void set(int row, int col, double val);
 };
-
-#endif
