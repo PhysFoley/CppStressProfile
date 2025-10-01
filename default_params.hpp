@@ -5,8 +5,6 @@
 #include <cmath>
 #include "forces.hpp"
 
-#pragma message ( "params.hpp not found, falling back to default_params.hpp" )
-
 //=========================================================
 // Change these constants as appriopriate
 //=========================================================

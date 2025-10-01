@@ -33,6 +33,7 @@
 #if __has_include("params.hpp")
     #include "params.hpp"
 #else
+    #pragma message ( "params.hpp not found, falling back to default_params.hpp" )
     #include "default_params.hpp"
 #endif
 
