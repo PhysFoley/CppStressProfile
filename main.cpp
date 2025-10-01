@@ -481,11 +481,11 @@ void analyze_steps(int th_id)
                 }
                 if(std::abs(bonds[i][bo]-i) == 1)
                 {
-                    phi_p = -fene(r, 30.0, 1.5);
+                    phi_p = -fene(r, k_fene, rmax_fene);
                 }
                 else
                 {
-                    phi_p = -bend(r, 10.0);
+                    phi_p = -bend(r, k_bend);
                 }
                 zbin_ind_b = int((fold(rb[2],Lz)-zvals[0]+(space/2.0))/space);
                 

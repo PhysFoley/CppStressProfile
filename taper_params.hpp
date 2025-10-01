@@ -14,6 +14,11 @@ const int NUM_BEAD_TYPES = 8;
 //make sure this is larger than longest-range non-bonded interaction!
 const double NB_CUTOFF = 3.5;
 
+// these are used in the force calculation and must always be defined
+double k_fene = 30.0;
+double rmax_fene = 1.5;
+double k_bend = 10.0;
+
 //=========================================================
 // Any new user-defined globals can go here
 //=========================================================
