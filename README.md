@@ -5,22 +5,23 @@ Numerical software to calculate stress tensor components of laterally homogeneou
 
 For the main code, the only requirement is a C++17 compiler; there are no dependencies beyond the standard libraries.
 
-The Python pre- and post-analysis files centertraj.py, blockeom.py, and plotresults.py depend on NumPy, SciPy, and MatPlotLib.
+The Python pre- and post-analysis files center.py, blockeom.py, and plotresults.py depend on NumPy, SciPy, and MatPlotLib.
 
 ## Usage
 
 The functions defining the forces between beads of different types and their parameters are specified in a file called "model.hpp". This repository provides three such parameter headers:
-* `default_model.hpp` : [Original Cooke lipid model](https://doi.org/10.1063/1.2135785)
-* `flipfix_model.hpp` : [Flipfixed 4-bead Cooke lipids](https://doi.org/10.1021/acs.jctc.0c00862)
-* `taper_model.hpp` : [Tapered flipfixed 4-bead Cooke lipids](https://doi.org/10.1063/5.0189771)
+* `model_default.hpp` : [Original Cooke lipid model](https://doi.org/10.1063/1.2135785)
+* `model_flipfix.hpp` : [Flipfixed 4-bead Cooke lipids](https://doi.org/10.1021/acs.jctc.0c00862)
+* `model_taper.hpp` : [Tapered flipfixed 4-bead Cooke lipids](https://doi.org/10.1063/5.0189771)
 
-In all cases, the conventions for bead type numbering follow those given in the simulation templates found [here](https://github.com/PhysFoley/pymbtools). Re-name the desired file to `params.hpp` before compiling, or write your own custom file tailored to your simulation. If `model.hpp` is not found, the code will compile with `default_model.hpp` and emit a warning.
+In all cases, the conventions for bead type numbering follow those given in the simulation templates found [here](https://github.com/PhysFoley/pymbtools). Re-name the desired file to `params.hpp` before compiling, or write your own custom file tailored to your simulation. If `model.hpp` is not found, the code will compile with `model_default.hpp` and emit a warning.
 
 To compile the main stress profile code, simply invoke `make` to generate the `stresscalc` executable.
+When modifying or swapping out `model.hpp`, the `stresscalc` executable needs to be deleted before running `make` again. This is also accomplished with `make clean`.
 
-The code requires trajectories to be in the VTF format written out by [ESPResSo MD](https://espressomd.org). The VTF trajectory file must be pre-processed such that the membrane is always located in the center of the box in the z-direction; this is done with
-`python centertraj.py trajectory.vtf`
-You can optionally give an output filename which by default is `centered_trajectory.vtf`.
+The code requires trajectories to be in the VTF format written out by [ESPResSo MD](https://espressomd.org). The VTF trajectory file must be pre-processed such that the bilayer midplane is always located in the center of the box in the z-direction; For symmetric systems this is done with
+`python center.py trajectory.vtf`
+You can optionally give an output filename which by default is `centered_trajectory.vtf`. For asymmetric (lipid number or shape) membranes, one should re-write `center.py` carefully to take into account the asymmetry of the membrane in order to correctly center the midplane.
 
 The stresscalc routine is invoked with a statement like
 

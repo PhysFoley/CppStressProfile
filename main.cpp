@@ -34,8 +34,8 @@
 #if __has_include("model.hpp")
     #include "model.hpp"
 #else
-    #pragma message ( "model.hpp not found, falling back to default_model.hpp" )
-    #include "default_model.hpp"
+    #pragma message ( "model.hpp not found, falling back to model_default.hpp" )
+    #include "model_default.hpp"
 #endif
 
 //=========================================================

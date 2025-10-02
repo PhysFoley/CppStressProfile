@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 # Functions for performing simple blocking analysis of correlated time series
 # data. Based on the method presented in:
 #     H. Flyvbjerg and H.G. Petersen, J. Chem. Phys. _91_, 461 (1989)
