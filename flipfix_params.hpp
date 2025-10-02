@@ -21,7 +21,7 @@ double rmax_fene = 1.5;
 double k_bend = 10.0;
 
 //=========================================================
-// Any new user-defined globals can go here
+// Any user-defined globals can go here
 //=========================================================
 
 double bhh = 0.95;
@@ -31,7 +31,7 @@ double wc = 1.6;
 double eps = 1.0;
 
 //=========================================================
-// Particle Pair Forces
+// Particle Pair Forces (see forces.hpp for built-in functions)
 //=========================================================
 
 double f00(double r, int i, int j)

@@ -20,7 +20,7 @@ double rmax_fene = 1.5;
 double k_bend = 10.0;
 
 //=========================================================
-// Any new user-defined globals can go here
+// Any user-defined globals can go here
 //=========================================================
 
 double wc = 1.6;
@@ -34,7 +34,7 @@ double alpha_b = 0.0;
 double bb[NUM_BEAD_TYPES][NUM_BEAD_TYPES];
 
 //=========================================================
-// Particle Pair Forces
+// Particle Pair Forces (see forces.hpp for built-in functions)
 //=========================================================
 
 // force involving head beads / flip-fixed beads
