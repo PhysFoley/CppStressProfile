@@ -39,7 +39,7 @@ double fene(double r, double k, double rinf)
     return -k*r/(1.0 - std::pow(r/rinf,2.0) );
 }
 
-double bend(double r, double k)
+double harmonic(double r, double k)
 {
     return -k*(r-4.0);
 }

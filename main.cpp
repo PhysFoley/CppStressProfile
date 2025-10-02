@@ -258,14 +258,8 @@ void analyze_steps(int th_id)
                     std::cout << "\nDivide by zero in bonded interactions!" << std::endl;
                     fail = true;
                 }
-                if(std::abs(bonds[i][bo]-i) == 1)
-                {
-                    phi_p = -fene(r, k_fene, rmax_fene);
-                }
-                else
-                {
-                    phi_p = -bend(r, k_bend);
-                }
+                phi_p = -bond_force(r, i, bonds[i][bo], type[i], type[bonds[i][bo]]);
+                
                 zbin_ind_b = int((fold(rb[2],Lz)-zvals[0]+(space/2.0))/space);
                 
                 distribute_stress(r, ri, rb, rib, phi_p, zbin_ind_i, zbin_ind_b,
