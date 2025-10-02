@@ -215,7 +215,7 @@ void analyze_steps(int th_id)
             tmp_Sn[m] = Sn[th_id][m];
         }
         double A = boxes[s][0]*boxes[s][1];
-        for(int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
+        for(unsigned int i = 0; !fail && (i < type.size()); i++) //loop over all particles i
         {
             ri = step[s][i];
             zbin_ind_i = int((fold(ri[2],Lz)-zvals[0]+(space/2.0))/space);
@@ -228,7 +228,7 @@ void analyze_steps(int th_id)
                     Sk[th_id][zbin_ind_i].set(k,k,Sk[th_id][zbin_ind_i].get(k,k)-temp);
                 }
             }
-            for(int j = 0; !fail && (j < i); j++) //loop over pairs i,j (without double-counting, hence j < i)
+            for(unsigned int j = 0; !fail && (j < i); j++) //loop over pairs i,j (without double-counting, hence j < i)
             {
                 rj = step[s][j];
                 mind_3d(ri, rj, boxes[s], rij); //rij stores return value
@@ -248,7 +248,7 @@ void analyze_steps(int th_id)
                 distribute_stress(r, ri, rj, rij, phi_p, zbin_ind_i, zbin_ind_j,
                                   zvals, space, Lz, A, Sn[th_id]);
             } //end non-bonded interactions
-            for(int bo = 0; bo < bonds[i].size(); bo++) //begin bonded interactions
+            for(unsigned int bo = 0; bo < bonds[i].size(); bo++) //begin bonded interactions
             {
                 rb = step[s][bonds[i][bo]];
                 mind_3d(ri, rb, boxes[s], rib);
@@ -452,7 +452,7 @@ int main(int argc, char** argv)
                       << boxes[0][1] << ", " << boxes[0][2] << "}\n\n";
 
             NVT = true;
-            for(int i = 1; i < step.size(); i++)
+            for(unsigned int i = 1; i < step.size(); i++)
             {
                 boxes.push_back(boxes[0]);
             }
@@ -490,7 +490,7 @@ int main(int argc, char** argv)
 
     double mean_x = 0.0;
     double mean_y = 0.0;
-    for(int i=0; i < boxes.size(); i++)
+    for(unsigned int i=0; i < boxes.size(); i++)
     {
       mean_x += boxes[i][0];
       mean_y += boxes[i][1];
@@ -515,7 +515,7 @@ int main(int argc, char** argv)
     
     steps_completed = new std::atomic<int>[n_cores];
     
-    for(int i = 0; i < n_cores; i++)
+    for(unsigned int i = 0; i < n_cores; i++)
     {
         Sk.push_back(new Mat3[n_zvals]);
         Sb.push_back(new Mat3[n_zvals]);
@@ -536,7 +536,7 @@ int main(int argc, char** argv)
     }
     
     // Spawn threads and calculate!
-    for(int i = 0; i < n_cores; i++)
+    for(unsigned int i = 0; i < n_cores; i++)
     {
         th.push_back(std::thread(analyze_steps,i));
     }
@@ -558,15 +558,15 @@ int main(int argc, char** argv)
     }
     
     // write the progress bar by tracking completed steps
-    int tot_steps_comp = 0;
+    unsigned int tot_steps_comp = 0;
     while(tot_steps_comp < step.size())
     {
         tot_steps_comp = 0;
-        for(int k = 0; k < n_cores; k++)
+        for(unsigned int k = 0; k < n_cores; k++)
         {
             tot_steps_comp += steps_completed[k];
         }
-        while(!checkpoints.empty() && (tot_steps_comp >= checkpoints.front()))
+        while(!checkpoints.empty() && ((int)tot_steps_comp >= checkpoints.front()))
         {
             std::cout << "*";
             std::cout.flush();
@@ -577,7 +577,7 @@ int main(int argc, char** argv)
     std::cout << "|" << std::endl << std::endl; //finish progress bar
     
     // synchronize with main thread
-    for(int i = 0; i < n_cores; i++)
+    for(unsigned int i = 0; i < n_cores; i++)
     {
         th[i].join();
     }
@@ -590,7 +590,7 @@ int main(int argc, char** argv)
         Mat3* tot_Sn = new Mat3[n_zvals];
         for(int i = 0; i < n_zvals; i++)
         {
-            for(int j =0; j < n_cores; j++)
+            for(unsigned int j = 0; j < n_cores; j++)
             {
                 tot_Sk[i] = tot_Sk[i] + Sk[j][i];
                 tot_Sb[i] = tot_Sb[i] + Sb[j][i];
@@ -647,7 +647,7 @@ int main(int argc, char** argv)
             // output for xx, yy, zz, yx, zx, zy
             for(int j = 0; j < 6; j++)
             {
-                for(int k = 0; k < step.size(); k++)
+                for(unsigned int k = 0; k < step.size(); k++)
                 {
                     tsfile << S_vals[i][indices[j]][k] << " ";
                 }
