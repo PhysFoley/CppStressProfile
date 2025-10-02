@@ -81,7 +81,6 @@ void setup_interaction_matrix(double (*forces[NUM_BEAD_TYPES][NUM_BEAD_TYPES])(d
 // Bonded Interactions
 //=========================================================
 
-// these are used in the force calculation and must always be defined
 double k_fene = 30.0;
 double rmax_fene = 1.5;
 double k_bend = 10.0;
