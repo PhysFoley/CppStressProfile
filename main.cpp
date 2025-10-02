@@ -31,11 +31,11 @@
 #include "utilities.hpp"
 #include "forces.hpp"
 
-#if __has_include("params.hpp")
-    #include "params.hpp"
+#if __has_include("model.hpp")
+    #include "model.hpp"
 #else
-    #pragma message ( "params.hpp not found, falling back to default_params.hpp" )
-    #include "default_params.hpp"
+    #pragma message ( "model.hpp not found, falling back to default_model.hpp" )
+    #include "default_model.hpp"
 #endif
 
 //=========================================================
