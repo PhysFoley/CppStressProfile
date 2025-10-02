@@ -1,3 +1,34 @@
+################################################################################
+# centertraj.py
+# Samuel Foley
+#
+# Center a VTF trajectory so that the bilayer midplane
+# remains at the middle z-position of the box. This
+# is a REQUIRED pre-processing step before using the
+# stress calculation code. Note: Box must NOT fluctuate
+# in z-direction.
+#
+# NOTE: This script simply places the overall centroid of
+# bead positions at the middle of the box. It does not account
+# for lipid number or shape asymmetry and generally the midplane
+# of an asymmetric membrane will be off-center after being
+# processed. Proper zeroing of the mid-plane in these cases
+# will require modifying this script to take into account
+# finer details for the situation of interest.
+#
+# The algorithm checks to see if there are more than a
+# certain threshold number (max_num) of lipid beads near the
+# edge of the simulation box (edge_size) and, if so, pre-shifts
+# the membrane to avoid coordinate wrapping issues.
+#
+# One REQUIRED command line arg: input trajectory filename
+# One optional argument: output trajectory filename
+#
+# Example usage:
+#     $python centertraj.py traj.vtf centered_traj.vtf
+#
+################################################################################
+
 import numpy as np
 import sys
 
