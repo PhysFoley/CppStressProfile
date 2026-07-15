@@ -39,9 +39,9 @@ After stress profile calculation completes (storing data by default in `timestep
 
 The output file stress_profile.dat contains line sequences like the following:
 
-    z= 14.8
-    -0.00381398 0 0 0 -0.00381398 0 0 0 -0.00381398
-    0.00142565 0 0 -0.000170827 0.00167245 0 -0.000478575 0.000606222 0.0127527
-    -0.00123832 0 0 -0.000141984 -0.0010852 0 0.000337088 -0.000500576 -0.00864861
+    z= 13.08
+    -0.884295 -0.884295 -0.884295 0 0 0 
+    0.938596 0.930961 16.2979 0.00242325 0.00191516 -0.011061 
+    -2.1517 -2.14125 -15.3688 0.00603738 -0.0120441 -0.000668066
 
 The first line gives the z value to which the following three lines of data correspond. The first of the three data lines contains the kinetic contribution to the components of the stress tensor, in this case calculated from the ideal gas contribution. The second data line contains contributions to the components of the stress tensor due to bonded interactions. The third data line contains the contributions to the stress tensor components due to non-bonded interactions. The total stress tensor is obtained for a particular z-value by summing these lines component-wise. The component ordering is as follows: xx, yy, zz, yx, zx, zy.
